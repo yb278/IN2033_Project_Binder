@@ -1,7 +1,7 @@
 -- =============================================================
 -- IPOS-CA Database Schema
--- Module: IN2033 Team Project 2025-2026
--- Team B (IPOS-CA), Group 2
+-- Module: IN2033 Team Project 
+-- Team 32 IPOS-CA
 -- Most functions are labelled in line with the Use Case Specs
 -- =============================================================
 

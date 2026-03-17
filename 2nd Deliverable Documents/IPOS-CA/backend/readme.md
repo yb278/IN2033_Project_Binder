@@ -4,7 +4,8 @@ It will consist of an SQLite database, it will handle everything including setup
 
 TO get it running you need:
 + MySQL, https://dev.mysql.com/downloads/installer/
-+ USE ipos_ca; then all queries can be done
++ First run `source path_to_ipos_ca_schema.sql`
++ Then all queries can be done or you can run the same command but with the test data and then test from there
 
 ## TODO
 + Look into java connector files 
