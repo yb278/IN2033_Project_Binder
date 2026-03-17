@@ -83,8 +83,7 @@ VALUES ('Monthly Volume Discount', 'FLEXIBLE',
 -- CA-03 Create, CA-04 Remove, CA-05 Update, CA-06 View Status
 -- CA-09 Update Status, CA-10 Record Payment, CA-33 Set Credit Limit
 -- CA-34 Apply Discount Plan
--- Status lifecycle per Student Brief Fig.1:
---   NORMAL -> SUSPENDED (15th of next month if unpaid) -> IN_DEFAULT (end of that month)
+-- Account status if a payment isn't made by the deadline,  NORMAL -> SUSPENDED (15th of next month if unpaid) -> IN_DEFAULT (end of that month)
 -- -------------------------------------------------------------
 CREATE TABLE account_holders (
     holder_id           INT             PRIMARY KEY AUTO_INCREMENT,
@@ -129,7 +128,7 @@ CREATE TABLE account_holder_payments (
 );
 
 -- -------------------------------------------------------------
--- STOCK ITEMS (local pharmacy inventory)
+-- STOCK ITEMS 
 -- Mirrors IPOS-SA catalogue but adds markup_rate and VAT reference
 -- CA-18 Maintain Stock, CA-19 View Stock, CA-20 Check Low Stock
 -- CA-21 Configure VAT (via merchant_settings.vat_rate)
@@ -137,8 +136,8 @@ CREATE TABLE account_holder_payments (
 -- -------------------------------------------------------------
 CREATE TABLE stock_items (
     stock_item_id       INT             PRIMARY KEY AUTO_INCREMENT,
-    -- Links to IPOS-SA catalogue (shared DB access approach)
-    sa_item_id          VARCHAR(20),                        -- e.g. "100 00001"
+    -- Links to IPOS-SA catalogue, so we need some sort of shared access here
+    sa_item_id          VARCHAR(20),                        -- Item ID
     description         VARCHAR(200)    NOT NULL,
     package_type        VARCHAR(50),
     unit                VARCHAR(20),
@@ -173,7 +172,7 @@ CREATE TABLE orders_to_sa (
 );
 
 -- -------------------------------------------------------------
--- ORDER LINE ITEMS (items within each order to IPOS-SA)
+-- ORDER ITEMS within that order (items within each order to IPOS-SA)
 -- -------------------------------------------------------------
 CREATE TABLE order_items (
     order_item_id   INT             PRIMARY KEY AUTO_INCREMENT,
@@ -185,14 +184,14 @@ CREATE TABLE order_items (
 );
 
 -- -------------------------------------------------------------
--- SALES TRANSACTIONS (sales to customers in the pharmacy shop)
+-- SALES (sales to customers in the pharmacy shop)
 -- CA-13 Record Sale, CA-14 Accept Payment, CA-15 Cash Payment
 -- CA-16 Card Payment, CA-17 Generate Receipt/Invoice
 -- -------------------------------------------------------------
 CREATE TABLE sales (
     sale_id             INT             PRIMARY KEY AUTO_INCREMENT,
     served_by           INT             NOT NULL REFERENCES users(user_id),
-    holder_id           INT             REFERENCES account_holders(holder_id), -- NULL = occasional customer
+    holder_id           INT             REFERENCES account_holders(holder_id), -- NULL meaning its a non-account holder
     -- Customer details for occasional customers (no account)
     occasional_name     VARCHAR(100),
     sale_timestamp      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -213,7 +212,7 @@ CREATE TABLE sales (
 );
 
 -- -------------------------------------------------------------
--- SALE LINE ITEMS
+-- SALE ITEMS for in store purchase
 -- -------------------------------------------------------------
 CREATE TABLE sale_items (
     sale_item_id    INT             PRIMARY KEY AUTO_INCREMENT,
@@ -251,7 +250,7 @@ CREATE TABLE templates (
     updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Default reminder templates (matching layout in Student Brief Appendix 6)
+-- Default reminder templates (matching layout in Student Brief)
 INSERT INTO templates (template_type, template_body) VALUES
 ('FIRST_REMINDER',
  'Dear {HOLDER_NAME},\n\nREMINDER - INVOICE NO.: {INVOICE_NO}\nIPOS Account: {ACCOUNT_NO}  Total Amount: {AMOUNT}\n\nAccording to our records, it appears that we have not yet received payment of the above invoice, which was raised against {HOLDER_NAME} on {INVOICE_DATE}.\n\nWe would appreciate payment at your earliest convenience.\nPayment is due by: {PAYMENT_DUE_DATE}\n\nIf you have already sent a payment to us recently, please accept our apologies.\n\nYours sincerely,\n{PHARMACIST_NAME}'),
