@@ -46,7 +46,7 @@ public class MainFrame extends JFrame {
         this.role         = role;
         this.currentUser  = currentUser;
 
-        setTitle("IPOS-CA — Cosymed");
+        setTitle("IPOS-CA — InfoPharma");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 750);
         setMinimumSize(new Dimension(1000, 650));
@@ -150,7 +150,7 @@ public class MainFrame extends JFrame {
         brandPanel.setBorder(new EmptyBorder(20, 20, 16, 20));
         brandPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 72));
 
-        JLabel brandName = new JLabel("Cosymed");
+        JLabel brandName = new JLabel("InfoPharma");
         brandName.setFont(new Font("Georgia", Font.BOLD, 15));
         brandName.setForeground(Color.WHITE);
         brandPanel.add(brandName, BorderLayout.CENTER);

@@ -46,7 +46,7 @@ public class MainFrame extends JFrame {
         this.role         = role;
         this.currentUser  = currentUser;
 
-        setTitle("IPOS-CA — Cosymed");
+        setTitle("IPOS-CA — InfoPharma");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 750);
         setMinimumSize(new Dimension(1000, 650));
