@@ -36,7 +36,7 @@ public class LoginFrame extends JFrame {
     private final UserDAO userDAO = new UserDAO();
 
     public LoginFrame() {
-        setTitle("IPOS-CA — InfoPharma");
+        setTitle("IPOS-CA — Cosymed");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(440, 560);
         setLocationRelativeTo(null);
@@ -90,7 +90,7 @@ public class LoginFrame extends JFrame {
         card.add(titleLabel);
         card.add(Box.createVerticalStrut(4));
 
-        JLabel subtitleLabel = new JLabel("InfoPharma Client Application");
+        JLabel subtitleLabel = new JLabel("Cosymed Client Application");
         subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
         subtitleLabel.setForeground(COL_SUBTEXT);
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
