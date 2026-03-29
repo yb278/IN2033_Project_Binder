@@ -1,8 +1,7 @@
 -- =============================================================
 -- IPOS-CA Database Schema
--- Module: IN2033 Team Project 
--- Team 32 IPOS-CA
--- Most functions are labelled in line with the Use Case Specs
+-- Module: IN2033 Team Project 2025-2026
+-- Team B (IPOS-CA), Group 2
 -- =============================================================
 
 CREATE DATABASE IF NOT EXISTS ipos_ca;
@@ -10,27 +9,28 @@ USE ipos_ca;
 
 -- -------------------------------------------------------------
 -- MERCHANT SETTINGS
--- Stores pharmacy identity details and config for this like VAT
--- Used by IPOS-CA-Templates and IPOS-CA-Stock
+-- Stores pharmacy identity details and global config (VAT, etc.)
+-- Used by IPOS-CA-Templates and IPOS-CA-Stock (CA-21, CA-37)
 -- -------------------------------------------------------------
 CREATE TABLE merchant_settings (
-    id              INT PRIMARY KEY DEFAULT 1,   -- Primary key
+    id              INT PRIMARY KEY DEFAULT 1,   -- single-row config table
     pharmacy_name   VARCHAR(100)    NOT NULL,
     address_line1   VARCHAR(100),
     address_line2   VARCHAR(100),
     city            VARCHAR(50),
     postcode        VARCHAR(10),
     phone           VARCHAR(20),
-    fax             VARCHAR(20), -- Not really needed but good to have 
+    fax             VARCHAR(20),
     email           VARCHAR(100),
-    vat_rate        DECIMAL(5,2)    NOT NULL DEFAULT 20.00,  -- CA-21 shows it as being configurable
-    created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP, -- Timestamps
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP -- Auto Update
+    logo_path       VARCHAR(255),                -- path to logo image file
+    vat_rate        DECIMAL(5,2)    NOT NULL DEFAULT 20.00,  -- configurable (CA-21)
+    created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Example of creating a new merchant, but there should only really be one per database
+-- Default merchant row
 INSERT INTO merchant_settings (id, pharmacy_name, address_line1, city, postcode, phone, vat_rate)
-VALUES (1, 'Cosymed Ltd.', '3 High Level Drive', 'Sydenham', 'SE26 3ET', '0208 778 0124', 20.00); 
+VALUES (1, 'Cosymed Ltd.', '3 High Level Drive', 'Sydenham', 'SE26 3ET', '0208 778 0124', 20.00);
 
 -- -------------------------------------------------------------
 -- USERS (Staff accounts for IPOS-CA login)
@@ -42,36 +42,37 @@ VALUES (1, 'Cosymed Ltd.', '3 High Level Drive', 'Sydenham', 'SE26 3ET', '0208 7
 CREATE TABLE users (
     user_id         INT             PRIMARY KEY AUTO_INCREMENT,
     username        VARCHAR(50)     NOT NULL UNIQUE,
-    password_hash   VARCHAR(255)    NOT NULL,               -- Security
+    password_hash   VARCHAR(255)    NOT NULL,               -- store hashed passwords
     first_name      VARCHAR(50)     NOT NULL,
     last_name       VARCHAR(50)     NOT NULL,
-    role            ENUM('ADMIN', 'PHARMACIST', 'MANAGER') NOT NULL, -- Has to be one of the three
-    is_active       BOOLEAN         NOT NULL DEFAULT TRUE,  -- CA-04 the ability to remove users/ deactivate them
+    role            ENUM('ADMIN', 'PHARMACIST', 'MANAGER') NOT NULL,
+    is_active       BOOLEAN         NOT NULL DEFAULT TRUE,  -- CA-04 (remove = deactivate)
     created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- One admin account to manage stuff
+-- Default admin account (password: admin123 – change before demo)
 INSERT INTO users (username, password_hash, first_name, last_name, role)
 VALUES ('admin', 'admin123', 'System', 'Admin', 'ADMIN');
 
 -- -------------------------------------------------------------
--- DISCOUNT PLANS for IPOS-CA-CUST
+-- DISCOUNT PLANS
+-- Supports fixed and flexible plans (Student Brief §8.2 IPOS-CA-CUST)
 -- CA-34: Apply Discount Plan to an account holder
 -- -------------------------------------------------------------
 CREATE TABLE discount_plans (
-    plan_id         INT             PRIMARY KEY AUTO_INCREMENT, -- AUTO increment is a useful feature for the demo
+    plan_id         INT             PRIMARY KEY AUTO_INCREMENT,
     plan_name       VARCHAR(100)    NOT NULL,
     plan_type       ENUM('FIXED', 'FLEXIBLE') NOT NULL,
     -- FIXED: single flat rate applied to every order
     fixed_rate      DECIMAL(5,2),                           -- e.g. 5.00 = 5%
     -- FLEXIBLE: JSON-encoded tiers stored as a text field
-    -- Format: [{"min":0,"max":1000,"rate":1.0}, {"min":1000,"max":2000,"rate":2.0}, ...] So its a list of JSON strings 
+    -- Format: [{"min":0,"max":1000,"rate":1.0}, {"min":1000,"max":2000,"rate":2.0}, ...]
     flexible_tiers  TEXT,
     created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
 );
 
--- Example plans for the demo
+-- Example plans
 INSERT INTO discount_plans (plan_name, plan_type, fixed_rate) VALUES ('No Discount', 'FIXED', 0.00);
 INSERT INTO discount_plans (plan_name, plan_type, fixed_rate) VALUES ('5% Flat Discount', 'FIXED', 5.00);
 INSERT INTO discount_plans (plan_name, plan_type, flexible_tiers)
@@ -83,7 +84,8 @@ VALUES ('Monthly Volume Discount', 'FLEXIBLE',
 -- CA-03 Create, CA-04 Remove, CA-05 Update, CA-06 View Status
 -- CA-09 Update Status, CA-10 Record Payment, CA-33 Set Credit Limit
 -- CA-34 Apply Discount Plan
--- Account status if a payment isn't made by the deadline,  NORMAL -> SUSPENDED (15th of next month if unpaid) -> IN_DEFAULT (end of that month)
+-- Status lifecycle per Student Brief Fig.1:
+--   NORMAL -> SUSPENDED (15th of next month if unpaid) -> IN_DEFAULT (end of that month)
 -- -------------------------------------------------------------
 CREATE TABLE account_holders (
     holder_id           INT             PRIMARY KEY AUTO_INCREMENT,
@@ -128,7 +130,7 @@ CREATE TABLE account_holder_payments (
 );
 
 -- -------------------------------------------------------------
--- STOCK ITEMS 
+-- STOCK ITEMS (local pharmacy inventory)
 -- Mirrors IPOS-SA catalogue but adds markup_rate and VAT reference
 -- CA-18 Maintain Stock, CA-19 View Stock, CA-20 Check Low Stock
 -- CA-21 Configure VAT (via merchant_settings.vat_rate)
@@ -136,8 +138,8 @@ CREATE TABLE account_holder_payments (
 -- -------------------------------------------------------------
 CREATE TABLE stock_items (
     stock_item_id       INT             PRIMARY KEY AUTO_INCREMENT,
-    -- Links to IPOS-SA catalogue, so we need some sort of shared access here
-    sa_item_id          VARCHAR(20),                        -- Item ID
+    -- Links to IPOS-SA catalogue (shared DB access approach)
+    sa_item_id          VARCHAR(20),                        -- e.g. "100 00001"
     description         VARCHAR(200)    NOT NULL,
     package_type        VARCHAR(50),
     unit                VARCHAR(20),
@@ -172,7 +174,7 @@ CREATE TABLE orders_to_sa (
 );
 
 -- -------------------------------------------------------------
--- ORDER ITEMS within that order (items within each order to IPOS-SA)
+-- ORDER LINE ITEMS (items within each order to IPOS-SA)
 -- -------------------------------------------------------------
 CREATE TABLE order_items (
     order_item_id   INT             PRIMARY KEY AUTO_INCREMENT,
@@ -184,14 +186,14 @@ CREATE TABLE order_items (
 );
 
 -- -------------------------------------------------------------
--- SALES (sales to customers in the pharmacy shop)
+-- SALES TRANSACTIONS (sales to customers in the pharmacy shop)
 -- CA-13 Record Sale, CA-14 Accept Payment, CA-15 Cash Payment
 -- CA-16 Card Payment, CA-17 Generate Receipt/Invoice
 -- -------------------------------------------------------------
 CREATE TABLE sales (
     sale_id             INT             PRIMARY KEY AUTO_INCREMENT,
     served_by           INT             NOT NULL REFERENCES users(user_id),
-    holder_id           INT             REFERENCES account_holders(holder_id), -- NULL meaning its a non-account holder
+    holder_id           INT             REFERENCES account_holders(holder_id), -- NULL = occasional customer
     -- Customer details for occasional customers (no account)
     occasional_name     VARCHAR(100),
     sale_timestamp      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -208,11 +210,12 @@ CREATE TABLE sales (
     card_first_four     CHAR(4),
     card_last_four      CHAR(4),
     card_expiry         CHAR(5),                                 -- MM/YY
-    invoice_number      VARCHAR(20)     UNIQUE                   -- generated invoice ref
+    invoice_number      VARCHAR(20)     UNIQUE,                  -- generated invoice ref
+    pu_reconciled       BOOLEAN         DEFAULT FALSE            -- TRUE once IPOS-PU has cleared the card payment
 );
 
 -- -------------------------------------------------------------
--- SALE ITEMS for in store purchase
+-- SALE LINE ITEMS
 -- -------------------------------------------------------------
 CREATE TABLE sale_items (
     sale_item_id    INT             PRIMARY KEY AUTO_INCREMENT,
@@ -250,7 +253,7 @@ CREATE TABLE templates (
     updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Default reminder templates (matching layout in Student Brief)
+-- Default reminder templates (matching layout in Student Brief Appendix 6)
 INSERT INTO templates (template_type, template_body) VALUES
 ('FIRST_REMINDER',
  'Dear {HOLDER_NAME},\n\nREMINDER - INVOICE NO.: {INVOICE_NO}\nIPOS Account: {ACCOUNT_NO}  Total Amount: {AMOUNT}\n\nAccording to our records, it appears that we have not yet received payment of the above invoice, which was raised against {HOLDER_NAME} on {INVOICE_DATE}.\n\nWe would appreciate payment at your earliest convenience.\nPayment is due by: {PAYMENT_DUE_DATE}\n\nIf you have already sent a payment to us recently, please accept our apologies.\n\nYours sincerely,\n{PHARMACIST_NAME}'),

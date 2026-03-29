@@ -276,9 +276,26 @@ public class PointOfSalePanel extends JPanel {
         customerSearchField.setForeground(COL_SUB);
         customerSearchField.setText("Enter account holder ID...");
         customerSearchField.addActionListener(e -> lookupAccountHolder());
+        // Clear placeholder text when clicked/focused
+        customerSearchField.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) {
+                if (customerSearchField.getText().equals("Enter account holder ID...")) {
+                    customerSearchField.setText("");
+                    customerSearchField.setForeground(COL_TEXT);
+                }
+            }
+            @Override public void focusLost(FocusEvent e) {
+                if (customerSearchField.getText().trim().isEmpty()) {
+                    customerSearchField.setForeground(COL_SUB);
+                    customerSearchField.setText("Enter account holder ID...");
+                }
+            }
+        });
 
         accountRadio.addActionListener(e -> {
             customerSearchField.setEnabled(true);
+            customerSearchField.setText("");
+            customerSearchField.setForeground(COL_TEXT);
             customerSearchField.requestFocus();
         });
         walkInRadio.addActionListener(e -> {

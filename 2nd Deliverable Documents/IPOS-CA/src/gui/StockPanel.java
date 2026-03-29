@@ -97,14 +97,24 @@ public class StockPanel extends JPanel {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         right.setBackground(COL_BG);
 
-        JButton vatBtn = makeButton("⚙ Configure VAT", new Color(0xE8F5EE), COL_PRI);
-        vatBtn.setBorder(new CompoundBorder(new LineBorder(COL_BORDER,1,true), new EmptyBorder(7,14,7,14)));
+        JButton vatBtn = makeButton("⚙ VAT", new Color(0xE8F5EE), COL_PRI);
+        vatBtn.setBorder(new CompoundBorder(new LineBorder(COL_BORDER,1,true), new EmptyBorder(7,12,7,12)));
         vatBtn.addActionListener(e -> openVatDialog());
 
-        JButton addBtn = makeButton("+ Add Stock Item", COL_PRI, Color.WHITE);
+        JButton addBtn = makeButton("+ Add Item", COL_PRI, Color.WHITE);
         addBtn.addActionListener(e -> openAddItemDialog());
 
+        JButton qtyBtn = makeButton("✏ Edit Qty", new Color(0xE8F5EE), new Color(0x3B82F6));
+        qtyBtn.setBorder(new CompoundBorder(new LineBorder(new Color(0x3B82F6),1,true), new EmptyBorder(7,12,7,12)));
+        qtyBtn.addActionListener(e -> openEditQuantityDialog());
+
+        JButton removeBtn = makeButton("✕ Remove", new Color(0xFEF2F2), new Color(0xEF4444));
+        removeBtn.setBorder(new CompoundBorder(new LineBorder(new Color(0xEF4444),1,true), new EmptyBorder(7,12,7,12)));
+        removeBtn.addActionListener(e -> removeSelectedItem());
+
         right.add(vatBtn);
+        right.add(qtyBtn);
+        right.add(removeBtn);
         right.add(addBtn);
         bar.add(right, BorderLayout.EAST);
         return bar;
@@ -312,6 +322,77 @@ public class StockPanel extends JPanel {
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Enter a valid percentage.", "Invalid",
                 JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException ex) { showDbError(ex); }
+    }
+
+    /** Edit quantity — increase or decrease stock level */
+    private void openEditQuantityDialog() {
+        if (selectedStockItemId < 0) {
+            JOptionPane.showMessageDialog(this, "Select a stock item first.");
+            return;
+        }
+        int row = stockTable.getSelectedRow();
+        String desc    = (String) tableModel.getValueAt(row, 2);
+        int currentQty = (int) tableModel.getValueAt(row, 3);
+
+        Object[] options = {"Add Stock", "Set Exact Quantity", "Reduce Stock"};
+        int choice = JOptionPane.showOptionDialog(this,
+            desc + "\nCurrent quantity: " + currentQty + " packs",
+            "Edit Stock Quantity", JOptionPane.DEFAULT_OPTION,
+            JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (choice < 0) return;
+
+        String input = JOptionPane.showInputDialog(this,
+            choice == 0 ? "How many packs to ADD?" :
+            choice == 1 ? "Set quantity to exactly:" :
+                          "How many packs to REMOVE?",
+            "Edit Quantity", JOptionPane.PLAIN_MESSAGE);
+        if (input == null || input.trim().isEmpty()) return;
+
+        try {
+            int qty = Integer.parseInt(input.trim());
+            if (qty < 0) throw new NumberFormatException();
+
+            if (choice == 0) {
+                stockDAO.increaseStock(selectedStockItemId, qty);
+            } else if (choice == 1) {
+                // Set exact quantity — use increaseStock/decreaseStock to reach target
+                if (qty > currentQty) {
+                    stockDAO.increaseStock(selectedStockItemId, qty - currentQty);
+                } else if (qty < currentQty) {
+                    stockDAO.decreaseStock(selectedStockItemId, currentQty - qty);
+                }
+            } else {
+                stockDAO.decreaseStock(selectedStockItemId, qty);
+            }
+            loadAllStock();
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Enter a valid whole number.", "Invalid",
+                JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException ex) { showDbError(ex); }
+    }
+
+    /** Remove a stock item entirely from the database */
+    private void removeSelectedItem() {
+        if (selectedStockItemId < 0) {
+            JOptionPane.showMessageDialog(this, "Select a stock item first.");
+            return;
+        }
+        int row = stockTable.getSelectedRow();
+        String desc = (String) tableModel.getValueAt(row, 2);
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Permanently remove \"" + desc + "\" from stock?\n" +
+            "This cannot be undone.",
+            "Confirm Remove", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        try {
+            stockDAO.removeStockItem(selectedStockItemId);
+            selectedStockItemId = -1;
+            loadAllStock();
+            JOptionPane.showMessageDialog(this, "\"" + desc + "\" removed from stock.",
+                "Removed", JOptionPane.INFORMATION_MESSAGE);
         } catch (SQLException ex) { showDbError(ex); }
     }
 

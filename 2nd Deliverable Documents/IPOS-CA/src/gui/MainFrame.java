@@ -7,6 +7,7 @@ import java.awt.event.*;
 
 import models.User;
 import service.AccountStatusService;
+import service.CrossSystemService;
 
 /**
  * MainFrame
@@ -21,11 +22,11 @@ public class MainFrame extends JFrame {
     // ---------------------------------------------------------------
     // Colours
     // ---------------------------------------------------------------
-    private static final Color COL_SIDEBAR       = new Color(0x1A6B3C);
-    private static final Color COL_SIDEBAR_HOVER = new Color(0x14522E);
-    private static final Color COL_SIDEBAR_SEL   = new Color(0x0D3D28);
-    private static final Color COL_SIDEBAR_TEXT  = new Color(0xD6EDE1);
-    private static final Color COL_SIDEBAR_SUB   = new Color(0x85B89A);
+    private static final Color COL_SIDEBAR       = new Color(0xF8FAF9);   // light grey-white
+    private static final Color COL_SIDEBAR_HOVER = new Color(0xE8F5EE);   // light green tint on hover
+    private static final Color COL_SIDEBAR_SEL   = new Color(0xD4EDDA);   // selected = soft green
+    private static final Color COL_SIDEBAR_TEXT  = new Color(0x1C2B20);   // near-black — readable on light bg
+    private static final Color COL_SIDEBAR_SUB   = new Color(0x6B7C72);   // muted for section labels
     private static final Color COL_TOPBAR        = Color.WHITE;
     private static final Color COL_CONTENT_BG    = new Color(0xF5F7FA);
     private static final Color COL_BORDER        = new Color(0xD6E4DC);
@@ -46,7 +47,7 @@ public class MainFrame extends JFrame {
         this.role         = role;
         this.currentUser  = currentUser;
 
-        setTitle("IPOS-CA — Cosymed");
+        setTitle("IPOS-CA — Cosymed Pharmacy");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 750);
         setMinimumSize(new Dimension(1000, 650));
@@ -73,7 +74,7 @@ public class MainFrame extends JFrame {
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 buildSidebar(), buildContentArea());
         split.setDividerSize(0);
-        split.setDividerLocation(240);
+        split.setDividerLocation(210);
         split.setEnabled(false);
         add(split, BorderLayout.CENTER);
     }
@@ -86,8 +87,8 @@ public class MainFrame extends JFrame {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(COL_TOPBAR);
         bar.setBorder(new CompoundBorder(
-                new MatteBorder(0, 0, 1, 0, COL_BORDER),
-                new EmptyBorder(10, 20, 10, 20)
+            new MatteBorder(0, 0, 1, 0, COL_BORDER),
+            new EmptyBorder(10, 20, 10, 20)
         ));
         bar.setPreferredSize(new Dimension(0, 54));
 
@@ -122,8 +123,8 @@ public class MainFrame extends JFrame {
         logoutBtn.setForeground(new Color(0x1A6B3C));
         logoutBtn.setBackground(COL_ACCENT);
         logoutBtn.setBorder(new CompoundBorder(
-                new LineBorder(COL_BORDER, 1, true),
-                new EmptyBorder(6, 14, 6, 14)
+            new LineBorder(COL_BORDER, 1, true),
+            new EmptyBorder(6, 14, 6, 14)
         ));
         logoutBtn.setFocusPainted(false);
         logoutBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -142,67 +143,76 @@ public class MainFrame extends JFrame {
         JPanel sidebar = new JPanel();
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
         sidebar.setBackground(COL_SIDEBAR);
-        sidebar.setPreferredSize(new Dimension(240, 0));
 
-        // Pharmacy name at top of sidebar
+        // Pharmacy name at top
         JPanel brandPanel = new JPanel(new BorderLayout());
         brandPanel.setBackground(COL_SIDEBAR);
-        brandPanel.setBorder(new EmptyBorder(20, 20, 16, 20));
-        brandPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 72));
+        brandPanel.setBorder(new EmptyBorder(18, 14, 14, 14));
+        brandPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 68));
 
-        JLabel brandName = new JLabel("Cosymed");
-        brandName.setFont(new Font("Georgia", Font.BOLD, 15));
-        brandName.setForeground(Color.WHITE);
+        JLabel brandName = new JLabel("Cosymed Ltd.");
+        brandName.setFont(new Font("Georgia", Font.BOLD, 14));
+        brandName.setForeground(new Color(0x1A6B3C));   // pharmacy green on white
         brandPanel.add(brandName, BorderLayout.CENTER);
 
         JLabel brandSub = new JLabel("IPOS Client Application");
         brandSub.setFont(new Font("SansSerif", Font.PLAIN, 10));
-        brandSub.setForeground(COL_SIDEBAR_SUB);
+        brandSub.setForeground(new Color(0x6B7C72));
         brandPanel.add(brandSub, BorderLayout.SOUTH);
 
         sidebar.add(brandPanel);
-
-        // Divider
         sidebar.add(makeSidebarDivider());
-        sidebar.add(Box.createVerticalStrut(8));
+        sidebar.add(Box.createVerticalStrut(6));
 
         // ---- Nav items based on role ----
-
         if (role.equals("ADMIN")) {
             sidebar.add(makeSectionLabel("Administration"));
-            sidebar.add(makeNavButton("👥  User Management",    "UserManagement",   true));
+            sidebar.add(makeNavButton("User Management",  "UserManagement",  true));
             sidebar.add(Box.createVerticalStrut(4));
         }
 
         if (role.equals("ADMIN") || role.equals("PHARMACIST")) {
             sidebar.add(makeSectionLabel("Operations"));
-            sidebar.add(makeNavButton("🛒  Point of Sale",       "PointOfSale",     role.equals("PHARMACIST")));
-            sidebar.add(makeNavButton("🧑  Account Holders",    "AccountHolders",  false));
-            sidebar.add(makeNavButton("📦  Stock",               "Stock",           false));
-            sidebar.add(makeNavButton("🚚  Orders to InfoPharma","Orders",          false));
-            sidebar.add(makeNavButton("📄  Monthly Statements",  "Statements",      false));
+            sidebar.add(makeNavButton("Point of Sale",    "PointOfSale",     role.equals("PHARMACIST")));
+            sidebar.add(makeNavButton("Account Holders",  "AccountHolders",  false));
+            sidebar.add(makeNavButton("Stock",            "Stock",           false));
+            sidebar.add(makeNavButton("Orders (SA)",      "Orders",          false));
+            sidebar.add(makeNavButton("Online Sales (PU)","OnlineSales",     false));
+            sidebar.add(makeNavButton("Statements",       "Statements",      false));
             sidebar.add(Box.createVerticalStrut(4));
         }
 
         if (role.equals("MANAGER") || role.equals("ADMIN")) {
             sidebar.add(makeSectionLabel("Management"));
-            sidebar.add(makeNavButton("📊  Reports",             "Reports",         role.equals("MANAGER")));
-            sidebar.add(makeNavButton("💳  Credit & Discounts",  "CreditDiscounts", false));
-            sidebar.add(makeNavButton("📝  Templates",           "Templates",       false));
-            sidebar.add(makeNavButton("⚙   Settings",            "Settings",        false));
+            sidebar.add(makeNavButton("Reports",          "Reports",         role.equals("MANAGER")));
+            sidebar.add(makeNavButton("Credit & Discounts","CreditDiscounts",false));
+            sidebar.add(makeNavButton("Templates",        "Templates",       false));
+            sidebar.add(makeNavButton("Settings",         "Settings",        false));
         }
 
-        // Push everything up
         sidebar.add(Box.createVerticalGlue());
 
-        // Bottom — version info
         JLabel versionLabel = new JLabel("IN2033 · Team B · 2025-26");
         versionLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
-        versionLabel.setForeground(COL_SIDEBAR_SUB);
-        versionLabel.setBorder(new EmptyBorder(12, 20, 16, 20));
+        versionLabel.setForeground(new Color(0x6B7C72));
+        versionLabel.setBorder(new EmptyBorder(10, 14, 14, 14));
         sidebar.add(versionLabel);
 
-        return sidebar;
+        // Wrap in a scroll pane so items never get cut off on small screens
+        JScrollPane scroll = new JScrollPane(sidebar,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setPreferredSize(new Dimension(210, 0));
+        scroll.setMinimumSize(new Dimension(210, 0));
+        scroll.getViewport().setBackground(COL_SIDEBAR);
+
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setPreferredSize(new Dimension(210, 0));
+        wrapper.setBorder(new MatteBorder(0, 0, 0, 1, new Color(0xD6E4DC)));
+        wrapper.add(scroll, BorderLayout.CENTER);
+        return wrapper;
     }
 
     // ---------------------------------------------------------------
@@ -274,8 +284,8 @@ public class MainFrame extends JFrame {
         JPanel card = new JPanel(new BorderLayout(0, 6));
         card.setBackground(Color.WHITE);
         card.setBorder(new CompoundBorder(
-                new LineBorder(COL_BORDER, 1, true),
-                new EmptyBorder(16, 18, 16, 18)
+            new LineBorder(COL_BORDER, 1, true),
+            new EmptyBorder(16, 18, 16, 18)
         ));
 
         // Coloured top stripe
@@ -338,6 +348,7 @@ public class MainFrame extends JFrame {
             case "AccountHolders":  panel = new AccountHoldersPanel();   break;
             case "Stock":           panel = new StockPanel();             break;
             case "Orders":          panel = new OrdersPanel();            break;
+            case "OnlineSales":     panel = new OnlineSalesPanel();       break;
             case "Statements":      panel = new StatementsPanel();        break;
             case "UserManagement":  panel = new UserManagementPanel();    break;
             case "Reports":         panel = new ReportsPanel();           break;
@@ -366,17 +377,52 @@ public class MainFrame extends JFrame {
             @Override
             protected Void doInBackground() {
                 try {
-                    AccountStatusService service = new AccountStatusService();
-                    service.runStatusCheck();
-                    service.resetMonthlyTotalsIfNewMonth();
+                    // 1. Update account statuses (Fig.1 state machine)
+                    AccountStatusService statusService = new AccountStatusService();
+                    statusService.runStatusCheck();
+                    statusService.resetMonthlyTotalsIfNewMonth();
                     System.out.println("[MainFrame] Account status check complete.");
+
+                    // 2. Process any pending online sales from IPOS-PU
+                    CrossSystemService crossSystem = new CrossSystemService();
+                    if (crossSystem.isIposPuReachable()) {
+                        int processed = crossSystem.processOnlineSales();
+                        if (processed > 0) {
+                            SwingUtilities.invokeLater(() ->
+                                showStatusMessage(processed + " online sale(s) synced from IPOS-PU."));
+                        }
+                    } else {
+                        System.out.println("[MainFrame] IPOS-PU not reachable — skipping online sales sync.");
+                    }
                 } catch (Exception e) {
-                    System.err.println("[MainFrame] Account status check failed: " + e.getMessage());
+                    System.err.println("[MainFrame] Startup check failed: " + e.getMessage());
                 }
                 return null;
             }
         };
         worker.execute();
+    }
+
+    /** Shows a brief status message in the top bar */
+    private void showStatusMessage(String message) {
+        JLabel msg = new JLabel("  ✓ " + message);
+        msg.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        msg.setForeground(new Color(0x1A6B3C));
+        pageTitleLabel.setText(pageTitleLabel.getText()); // keep title
+
+        // Add message to top bar temporarily
+        Container topBar = pageTitleLabel.getParent();
+        topBar.add(msg, BorderLayout.CENTER);
+        topBar.revalidate();
+
+        // Remove after 4 seconds
+        Timer timer = new Timer(4000, e -> {
+            topBar.remove(msg);
+            topBar.revalidate();
+            topBar.repaint();
+        });
+        timer.setRepeats(false);
+        timer.start();
     }
 
     // ---------------------------------------------------------------
@@ -385,10 +431,10 @@ public class MainFrame extends JFrame {
 
     private void logout() {
         int confirm = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to sign out?",
-                "Sign Out",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
+            "Are you sure you want to sign out?",
+            "Sign Out",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE);
         if (confirm == JOptionPane.YES_OPTION) {
             new LoginFrame();
             dispose();
@@ -401,19 +447,23 @@ public class MainFrame extends JFrame {
 
     private JButton makeNavButton(String label, String panelName, boolean selectByDefault) {
         JButton btn = new JButton(label);
-        btn.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        btn.setFont(new Font("SansSerif", Font.PLAIN, 12));
         btn.setForeground(COL_SIDEBAR_TEXT);
         btn.setBackground(selectByDefault ? COL_SIDEBAR_SEL : COL_SIDEBAR);
-        btn.setBorderPainted(false);
         btn.setFocusPainted(false);
+        btn.setBorderPainted(true);
         btn.setHorizontalAlignment(SwingConstants.LEFT);
-        btn.setBorder(new EmptyBorder(10, 16, 10, 16));
+        // Green left-bar accent on selected item, invisible otherwise
+        btn.setBorder(selectByDefault
+            ? new CompoundBorder(new MatteBorder(0, 3, 0, 0, new Color(0x4ADE80)),
+                                 new EmptyBorder(9, 12, 9, 8))
+            : new CompoundBorder(new MatteBorder(0, 3, 0, 0, COL_SIDEBAR),
+                                 new EmptyBorder(9, 12, 9, 8)));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
-        btn.setToolTipText(label.replaceAll("^[^a-zA-Z]+", "").trim()); // tooltip shows full text
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        btn.setToolTipText(label);
 
-        // Derive readable title from label (strip emoji prefix)
-        String pageTitle = label.replaceAll("^[^a-zA-Z]+", "").trim();
+        String pageTitle = label;
 
         btn.addMouseListener(new MouseAdapter() {
             @Override public void mouseEntered(MouseEvent e) {
@@ -424,9 +474,21 @@ public class MainFrame extends JFrame {
             }
         });
 
-        btn.addActionListener(e -> showPanel(panelName, pageTitle, btn));
+        btn.addActionListener(e -> {
+            // Clear accent on previous selection
+            if (currentNavButton != null) {
+                currentNavButton.setBackground(COL_SIDEBAR);
+                currentNavButton.setBorder(new CompoundBorder(
+                    new MatteBorder(0, 3, 0, 0, COL_SIDEBAR),
+                    new EmptyBorder(9, 12, 9, 8)));
+            }
+            // Apply accent to this button
+            btn.setBorder(new CompoundBorder(
+                new MatteBorder(0, 3, 0, 0, new Color(0x4ADE80)),
+                new EmptyBorder(9, 12, 9, 8)));
+            showPanel(panelName, pageTitle, btn);
+        });
 
-        // Auto-select default button
         if (selectByDefault) {
             SwingUtilities.invokeLater(() -> {
                 currentNavButton = btn;
@@ -437,18 +499,21 @@ public class MainFrame extends JFrame {
         return btn;
     }
 
+    /** Returns a plain-text icon for each panel — renders reliably inside HTML nobr */
+    private String getNavIcon(String panelName) { return ""; } // icons removed, using accent bar instead
+
     private JLabel makeSectionLabel(String text) {
         JLabel label = new JLabel(text.toUpperCase());
         label.setFont(new Font("SansSerif", Font.BOLD, 10));
         label.setForeground(COL_SIDEBAR_SUB);
-        label.setBorder(new EmptyBorder(12, 20, 4, 20));
+        label.setBorder(new EmptyBorder(12, 14, 4, 14));
         label.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
         return label;
     }
 
     private JSeparator makeSidebarDivider() {
         JSeparator sep = new JSeparator();
-        sep.setForeground(new Color(0x2D7A50));
+        sep.setForeground(new Color(0xD6E4DC));
         sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
         return sep;
     }
@@ -470,8 +535,8 @@ public class MainFrame extends JFrame {
             card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
             card.setBackground(Color.WHITE);
             card.setBorder(new CompoundBorder(
-                    new LineBorder(new Color(0xD6E4DC), 1, true),
-                    new EmptyBorder(40, 48, 40, 48)
+                new LineBorder(new Color(0xD6E4DC), 1, true),
+                new EmptyBorder(40, 48, 40, 48)
             ));
 
             // Coloured accent bar at top

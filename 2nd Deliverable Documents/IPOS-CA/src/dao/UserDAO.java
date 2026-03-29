@@ -88,8 +88,25 @@ public class UserDAO {
     // ---------------------------------------------------------------
 
     /**
+     * Permanently deletes a user account from the database.
+     * Only use when the user has no associated sales records.
+     * Prefer deactivateUser() for users with transaction history.
+     *
+     * @param userId the ID of the user to delete
+     * @return true if the delete succeeded
+     * @throws SQLException if a database error occurs or FK constraints prevent deletion
+     */
+    public boolean deleteUser(int userId) throws SQLException {
+        String sql = "DELETE FROM users WHERE user_id = ?";
+        try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /**
      * Deactivates a user account (soft delete).
-     * Preserves data integrity for audit trails.
+     * Preserves data integrity — preferred over deleteUser for users with sales history.
      *
      * @param userId the ID of the user to deactivate
      * @return true if the update succeeded

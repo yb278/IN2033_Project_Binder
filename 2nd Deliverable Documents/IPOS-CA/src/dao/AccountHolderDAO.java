@@ -316,6 +316,42 @@ public class AccountHolderDAO {
         return results;
     }
 
+    /**
+     * Permanently deletes an account holder and all their associated records
+     * (payments, reminders) in a single transaction.
+     * Only safe to use when the holder has no outstanding balance and
+     * no linked sales records (sales reference holder_id).
+     *
+     * @param holderId the ID of the account holder to delete
+     * @throws SQLException if a database error occurs or FK constraints prevent deletion
+     */
+    public void deleteAccountHolder(int holderId) throws SQLException {
+        Connection conn = DatabaseConnection.getConnection();
+        conn.setAutoCommit(false);
+        try {
+            // Delete child records first to satisfy FK constraints
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM reminders WHERE holder_id = ?")) {
+                ps.setInt(1, holderId); ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM account_holder_payments WHERE holder_id = ?")) {
+                ps.setInt(1, holderId); ps.executeUpdate();
+            }
+            // Delete the account holder record itself
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM account_holders WHERE holder_id = ?")) {
+                ps.setInt(1, holderId); ps.executeUpdate();
+            }
+            conn.commit();
+        } catch (SQLException e) {
+            conn.rollback();
+            throw e;
+        } finally {
+            conn.setAutoCommit(true);
+        }
+    }
+
     // ---------------------------------------------------------------
     // Private helper: map a ResultSet row to an AccountHolder object
     // ---------------------------------------------------------------

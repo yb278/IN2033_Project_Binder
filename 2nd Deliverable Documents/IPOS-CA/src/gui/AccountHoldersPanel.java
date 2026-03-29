@@ -4,6 +4,7 @@ import dao.AccountHolderDAO;
 import dao.DiscountPlanDAO;
 import models.AccountHolder;
 import models.AccountHolder.AccountStatus;
+import service.AccountStatusService;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -44,7 +45,7 @@ public class AccountHoldersPanel extends JPanel {
     private DefaultTableModel  tableModel;
     private JLabel             detailName, detailStatus, detailBalance, detailCredit;
     private JButton            editBtn, recordPaymentBtn, setCreditBtn,
-                               applyDiscountBtn, updateStatusBtn;
+                               applyDiscountBtn, updateStatusBtn, deleteHolderBtn;
 
     // Holds the holder_id of whichever row is selected
     private int selectedHolderId = -1;
@@ -96,13 +97,36 @@ public class AccountHoldersPanel extends JPanel {
         searchRow.add(searchField, BorderLayout.CENTER);
         searchRow.add(searchBtn,   BorderLayout.EAST);
 
+        // Right-side buttons
+        JPanel rightBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        rightBtns.setBackground(COL_BG);
+
+        // Run Status Check — for demo purposes, triggers the state machine immediately
+        JButton statusCheckBtn = new JButton("⟳ Run Status Check");
+        statusCheckBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        statusCheckBtn.setForeground(new Color(0x8B5CF6));
+        statusCheckBtn.setBackground(new Color(0xF5F0FF));
+        statusCheckBtn.setBorder(new CompoundBorder(
+            new LineBorder(new Color(0x8B5CF6), 1, true),
+            new EmptyBorder(7, 12, 7, 12)
+        ));
+        statusCheckBtn.setFocusPainted(false);
+        statusCheckBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        statusCheckBtn.setToolTipText(
+            "Runs the account status state machine now (normally runs on login).\n" +
+            "Use this to demo automatic status transitions.");
+        statusCheckBtn.addActionListener(e -> runStatusCheckNow());
+
         JButton newBtn = makeButton("+ New Account Holder", new Color(0xE8F5EE), COL_PRIMARY);
         newBtn.setBorder(new CompoundBorder(
             new LineBorder(COL_BORDER, 1, true), new EmptyBorder(8, 16, 8, 16)));
         newBtn.addActionListener(e -> openCreateDialog());
 
-        bar.add(searchRow, BorderLayout.CENTER);
-        bar.add(newBtn,    BorderLayout.EAST);
+        rightBtns.add(statusCheckBtn);
+        rightBtns.add(newBtn);
+
+        bar.add(searchRow,  BorderLayout.CENTER);
+        bar.add(rightBtns,  BorderLayout.EAST);
         return bar;
     }
 
@@ -205,12 +229,14 @@ public class AccountHoldersPanel extends JPanel {
         setCreditBtn     = makeActionButton("💳  Set Credit Limit",    new Color(0x8B5CF6));
         applyDiscountBtn = makeActionButton("🏷  Apply Discount Plan", new Color(0xF59E0B));
         updateStatusBtn  = makeActionButton("🔄  Update Status",       new Color(0xEF4444));
+        deleteHolderBtn  = makeActionButton("🗑  Delete Account",      new Color(0xEF4444));
 
         editBtn.addActionListener(e -> openEditDialog());
         recordPaymentBtn.addActionListener(e -> openRecordPaymentDialog());
         setCreditBtn.addActionListener(e -> openSetCreditDialog());
         applyDiscountBtn.addActionListener(e -> openApplyDiscountDialog());
         updateStatusBtn.addActionListener(e -> openUpdateStatusDialog());
+        deleteHolderBtn.addActionListener(e -> deleteSelectedHolder());
 
         for (JButton btn : new JButton[]{editBtn, recordPaymentBtn,
                 setCreditBtn, applyDiscountBtn, updateStatusBtn}) {
@@ -218,6 +244,14 @@ public class AccountHoldersPanel extends JPanel {
             panel.add(btn);
             panel.add(Box.createVerticalStrut(8));
         }
+
+        // Separator before delete
+        panel.add(Box.createVerticalStrut(4));
+        panel.add(makeDivider());
+        panel.add(Box.createVerticalStrut(8));
+        deleteHolderBtn.setEnabled(false);
+        panel.add(deleteHolderBtn);
+        panel.add(Box.createVerticalStrut(8));
 
         panel.add(Box.createVerticalGlue());
         return panel;
@@ -238,6 +272,48 @@ public class AccountHoldersPanel extends JPanel {
             return;
         }
         runInBackground(() -> accountHolderDAO.searchByName(term), this::populateTable);
+    }
+
+    /**
+     * Runs the account status state machine immediately on demand.
+     * Normally this runs automatically on login — this button is for demo purposes
+     * so you can trigger and show all four status transitions without restarting.
+     *
+     * Demo flow:
+     *   1. Set up a test account with outstanding_balance > 0 and old payment_due_date
+     *   2. Click this button
+     *   3. Watch the status change in real time when the table refreshes
+     */
+    private void runStatusCheckNow() {
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                AccountStatusService service = new AccountStatusService();
+                service.runStatusCheck();
+                service.generateDueReminders();
+                return null;
+            }
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    loadAllHolders();
+                    JOptionPane.showMessageDialog(AccountHoldersPanel.this,
+                        "Status check complete.\n\n"
+                        + "Accounts updated automatically where applicable:\n"
+                        + "  • Past 15th of following month  →  SUSPENDED\n"
+                        + "  • Past end of following month   →  IN_DEFAULT\n"
+                        + "  • Full payment received         →  NORMAL\n\n"
+                        + "Table has been refreshed.",
+                        "Status Check Complete", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(AccountHoldersPanel.this,
+                        "Status check failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        worker.execute();
     }
 
     private void populateTable(List<AccountHolder> holders) {
@@ -429,8 +505,58 @@ public class AccountHoldersPanel extends JPanel {
 
     private void setDetailEnabled(boolean enabled) {
         for (JButton btn : new JButton[]{editBtn, recordPaymentBtn,
-                setCreditBtn, applyDiscountBtn, updateStatusBtn})
+                setCreditBtn, applyDiscountBtn, updateStatusBtn, deleteHolderBtn})
             btn.setEnabled(enabled);
+    }
+
+    /** Permanently delete an account holder — two-step confirmation */
+    private void deleteSelectedHolder() {
+        if (selectedHolderId < 0) return;
+        String name = detailName.getText();
+        String balance = detailBalance.getText();
+
+        // Warn if they have an outstanding balance
+        boolean hasBalance = !balance.equals("£0.00") && !balance.equals("—");
+
+        String warning = "Permanently delete account holder: " + name + "?\n\n"
+            + "⚠  This cannot be undone.\n"
+            + "   This will also delete all their payment records and reminders.";
+        if (hasBalance) {
+            warning += "\n\n⚠  WARNING: This account has an outstanding balance of "
+                + balance + ".\n   Deleting it will lose this record permanently.";
+        }
+
+        int first = JOptionPane.showConfirmDialog(this, warning,
+            "Delete Account Holder", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (first != JOptionPane.YES_OPTION) return;
+
+        int second = JOptionPane.showConfirmDialog(this,
+            "Are you absolutely sure you want to permanently delete " + name + "?",
+            "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE);
+        if (second != JOptionPane.YES_OPTION) return;
+
+        try {
+            accountHolderDAO.deleteAccountHolder(selectedHolderId);
+            JOptionPane.showMessageDialog(this,
+                name + "'s account has been permanently deleted.",
+                "Deleted", JOptionPane.INFORMATION_MESSAGE);
+            selectedHolderId = -1;
+            setDetailEnabled(false);
+            detailName.setText("Select a row");
+            detailStatus.setText("—");
+            detailBalance.setText("—");
+            detailCredit.setText("—");
+            loadAllHolders();
+        } catch (SQLException ex) {
+            if (ex.getMessage().contains("foreign key") || ex.getMessage().contains("constraint")) {
+                JOptionPane.showMessageDialog(this,
+                    "Cannot delete " + name + " — they have linked sales records.\n"
+                    + "Their sales history must be preserved for accounting purposes.",
+                    "Cannot Delete", JOptionPane.WARNING_MESSAGE);
+            } else {
+                showDbError(ex);
+            }
+        }
     }
 
     private void showDbError(Exception ex) {

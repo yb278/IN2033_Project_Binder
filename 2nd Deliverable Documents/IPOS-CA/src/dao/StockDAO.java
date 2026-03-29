@@ -230,6 +230,21 @@ public class StockDAO {
     }
 
     /**
+     * Permanently removes a stock item from the database.
+     *
+     * @param stockItemId the item to remove
+     * @return true if the delete succeeded
+     * @throws SQLException if a database error occurs
+     */
+    public boolean removeStockItem(int stockItemId) throws SQLException {
+        String sql = "DELETE FROM stock_items WHERE stock_item_id = ?";
+        try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, stockItemId);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /**
      * Searches for stock items by description (partial match, case-insensitive).
      *
      * @param searchTerm the keyword to search for

@@ -23,10 +23,17 @@ class OrdersPanel extends JPanel {
     private static final Color COL_PRI    = new Color(0x1A6B3C);
     private static final Color COL_BORDER = new Color(0xD6E4DC);
     private static final Color COL_SUB    = new Color(0x6B7C72);
+    private static final Color COL_TEXT   = new Color(0x1C2B20);
 
     private final OrderDAO orderDAO = new OrderDAO();
+    private final service.CrossSystemService crossSystem = new service.CrossSystemService();
+
     private DefaultTableModel ordersModel;
-    private JLabel balanceLabel, pendingLabel, totalLabel;
+    private JTable            ordersTable;   // kept as field so double-click can reference it
+    private JLabel            balanceLabel, pendingLabel, totalLabel;
+
+    // Stores orderId of selected row so we can load items
+    private int selectedOrderId = -1;
 
     public OrdersPanel() {
         setLayout(new BorderLayout(0, 0));
@@ -41,15 +48,15 @@ class OrdersPanel extends JPanel {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(COL_BG);
         bar.setBorder(new EmptyBorder(0, 0, 16, 0));
-        JLabel info = new JLabel("Orders placed with InfoPharma (IPOS-SA). Double-click to view items.");
+
+        JLabel info = new JLabel("Orders placed with InfoPharma (IPOS-SA). Double-click a row to view line items.");
         info.setFont(new Font("SansSerif", Font.ITALIC, 12));
         info.setForeground(COL_SUB);
+
         JButton newBtn = makeButton("+ Place New Order", COL_PRI, Color.WHITE);
-        newBtn.addActionListener(e -> JOptionPane.showMessageDialog(this,
-            "Cross-system order form: reads IPOS-SA catalogue via shared DB.\n" +
-            "Coordinate table names with Team A to complete this.", "Place Order",
-            JOptionPane.INFORMATION_MESSAGE));
-        bar.add(info, BorderLayout.WEST);
+        newBtn.addActionListener(e -> openNewOrderDialog());
+
+        bar.add(info,   BorderLayout.WEST);
         bar.add(newBtn, BorderLayout.EAST);
         return bar;
     }
@@ -57,14 +64,18 @@ class OrdersPanel extends JPanel {
     private JPanel buildTable() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(COL_BG);
+
         String[] cols = {"Order Ref","Date Placed","Total (£)","Status",
                          "Dispatched","Delivered","Payment"};
         ordersModel = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
-        JTable table = new JTable(ordersModel);
-        styleTable(table);
-        table.getColumnModel().getColumn(3).setCellRenderer(new DefaultTableCellRenderer() {
+
+        ordersTable = new JTable(ordersModel);
+        styleTable(ordersTable);
+
+        // Status column colour — column 4 (0=id hidden, 1=ref, 2=date, 3=total, 4=status)
+        ordersTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
             @Override public Component getTableCellRendererComponent(JTable t, Object v,
                     boolean sel, boolean foc, int r, int c) {
                 JLabel l = (JLabel) super.getTableCellRendererComponent(t,v,sel,foc,r,c);
@@ -78,7 +89,26 @@ class OrdersPanel extends JPanel {
                 return l;
             }
         });
-        JScrollPane scroll = new JScrollPane(table);
+
+        // Track selected row
+        ordersTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && ordersTable.getSelectedRow() >= 0) {
+                // Store the orderId — col 0 contains the ref string, we need the DB id
+                // We store it separately in loadOrders using a hidden column trick
+                // For now use row index to map back to order list
+            }
+        });
+
+        // Double-click → show line items dialog
+        ordersTable.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && ordersTable.getSelectedRow() >= 0) {
+                    showOrderItems(ordersTable.getSelectedRow());
+                }
+            }
+        });
+
+        JScrollPane scroll = new JScrollPane(ordersTable);
         scroll.setBorder(new LineBorder(COL_BORDER, 1, true));
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
@@ -95,6 +125,9 @@ class OrdersPanel extends JPanel {
         return bar;
     }
 
+    // ---------------------------------------------------------------
+    // Data loading
+    // ---------------------------------------------------------------
     private void loadOrders() {
         SwingWorker<Void, Void> w = new SwingWorker<Void, Void>() {
             List<models.Order> orders;
@@ -115,6 +148,7 @@ class OrdersPanel extends JPanel {
                         String delivered  = o.getDeliveryDate() != null
                             ? o.getDeliveryDate().toLocalDateTime().toLocalDate().toString() : "—";
                         ordersModel.addRow(new Object[]{
+                            o.getOrderId(), // hidden first column — actual DB ID for item lookup
                             o.getIposSaOrderRef() != null ? o.getIposSaOrderRef() : "IP-" + o.getOrderId(),
                             o.getOrderDate().toLocalDateTime().toLocalDate().toString(),
                             String.format("%.2f", o.getTotalAmount()),
@@ -122,6 +156,11 @@ class OrdersPanel extends JPanel {
                         });
                         if (!"DELIVERED".equals(o.getStatus())) pending++;
                     }
+                    // Hide the first column (order ID) — used internally only
+                    ordersTable.getColumnModel().getColumn(0).setMinWidth(0);
+                    ordersTable.getColumnModel().getColumn(0).setMaxWidth(0);
+                    ordersTable.getColumnModel().getColumn(0).setWidth(0);
+
                     totalLabel.setText("Total Orders: " + orders.size());
                     balanceLabel.setText("Outstanding Balance: £" + String.format("%.2f", balance));
                     pendingLabel.setText("Pending Delivery: " + pending);
@@ -132,6 +171,197 @@ class OrdersPanel extends JPanel {
             }
         };
         w.execute();
+    }
+
+    // ---------------------------------------------------------------
+    // Double-click — show order line items
+    // ---------------------------------------------------------------
+    private void showOrderItems(int row) {
+        int orderId = (int) ordersModel.getValueAt(row, 0); // hidden col
+        String orderRef = (String) ordersModel.getValueAt(row, 1);
+
+        SwingWorker<List<models.OrderItem>, Void> w =
+            new SwingWorker<List<models.OrderItem>, Void>() {
+                @Override protected List<models.OrderItem> doInBackground() throws Exception {
+                    return orderDAO.getOrderItems(orderId);
+                }
+                @Override protected void done() {
+                    try {
+                        List<models.OrderItem> items = get();
+                        showOrderItemsDialog(orderRef, items);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(OrdersPanel.this,
+                            "Could not load order items: " + ex.getMessage());
+                    }
+                }
+            };
+        w.execute();
+    }
+
+    private void showOrderItemsDialog(String orderRef, List<models.OrderItem> items) {
+        JDialog dialog = new JDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this),
+            "Order Items — " + orderRef, true);
+        dialog.setSize(560, 340);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(0, 12));
+        panel.setBorder(new EmptyBorder(16, 16, 16, 16));
+        panel.setBackground(COL_WHITE);
+
+        JLabel heading = new JLabel("Line items for order " + orderRef);
+        heading.setFont(new Font("Georgia", Font.BOLD, 13));
+        heading.setForeground(COL_TEXT);
+        panel.add(heading, BorderLayout.NORTH);
+
+        if (items.isEmpty()) {
+            JLabel empty = new JLabel("No line items found for this order.", SwingConstants.CENTER);
+            empty.setFont(new Font("SansSerif", Font.ITALIC, 13));
+            empty.setForeground(COL_SUB);
+            panel.add(empty, BorderLayout.CENTER);
+        } else {
+            String[] cols = {"Item ID","Description","Qty","Unit Cost (£)","Line Total (£)"};
+            DefaultTableModel m = new DefaultTableModel(cols, 0) {
+                @Override public boolean isCellEditable(int r, int c) { return false; }
+            };
+            for (models.OrderItem item : items) {
+                m.addRow(new Object[]{
+                    item.getStockItemId(),
+                    item.getDescription(),
+                    item.getQuantity(),
+                    String.format("%.2f", item.getUnitCost()),
+                    String.format("%.2f", item.getLineTotal())
+                });
+            }
+            JTable t = new JTable(m);
+            t.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            t.setRowHeight(30); t.setShowGrid(false);
+            t.setBackground(COL_WHITE); t.setFillsViewportHeight(true);
+            t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
+            t.getTableHeader().setBackground(new Color(0xF1F5F9));
+            panel.add(new JScrollPane(t), BorderLayout.CENTER);
+        }
+
+        JButton close = new JButton("Close");
+        close.addActionListener(e -> dialog.dispose());
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnRow.setBackground(COL_WHITE);
+        btnRow.add(close);
+        panel.add(btnRow, BorderLayout.SOUTH);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
+    }
+
+    // ---------------------------------------------------------------
+    // New Order dialog — prints API message to terminal
+    // ---------------------------------------------------------------
+    private void openNewOrderDialog() {
+        JDialog dialog = new JDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this),
+            "Place New Order with InfoPharma", true);
+        dialog.setSize(520, 440);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(0, 12));
+        panel.setBorder(new EmptyBorder(16, 16, 16, 16));
+        panel.setBackground(COL_WHITE);
+
+        // Info banner
+        JLabel info = new JLabel(
+            "<html><b>IPOS-SA API Integration</b><br>"
+            + "When Team A's API is ready, this will fetch the live catalogue and submit the order.<br>"
+            + "For now, clicking Place Order prints the API call to the terminal.</html>");
+        info.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        info.setForeground(COL_SUB);
+        info.setBorder(new CompoundBorder(
+            new LineBorder(COL_BORDER,1,true), new EmptyBorder(10,12,10,12)));
+        panel.add(info, BorderLayout.NORTH);
+
+        // Simple order form
+        JPanel form = new JPanel();
+        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
+        form.setBackground(COL_WHITE);
+
+        JLabel merchantLbl = new JLabel("Our Merchant Account No. (with InfoPharma):");
+        merchantLbl.setFont(new Font("SansSerif", Font.BOLD, 12));
+        merchantLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField merchantField = new JTextField("COSYMED-001");
+        merchantField.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        merchantField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        merchantField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        merchantField.setBorder(new CompoundBorder(
+            new LineBorder(COL_BORDER,1,true), new EmptyBorder(6,8,6,8)));
+
+        JLabel itemsLbl = new JLabel("Items to order (one per line: SAItemID, quantity):");
+        itemsLbl.setFont(new Font("SansSerif", Font.BOLD, 12));
+        itemsLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextArea itemsArea = new JTextArea(
+            "100 00001, 500\n100 00002, 300\n200 00004, 200");
+        itemsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        itemsArea.setBorder(new EmptyBorder(6,8,6,8));
+        JScrollPane areaScroll = new JScrollPane(itemsArea);
+        areaScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        areaScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 140));
+
+        form.add(merchantLbl); form.add(Box.createVerticalStrut(4));
+        form.add(merchantField); form.add(Box.createVerticalStrut(12));
+        form.add(itemsLbl); form.add(Box.createVerticalStrut(4));
+        form.add(areaScroll);
+
+        panel.add(form, BorderLayout.CENTER);
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        btnRow.setBackground(COL_WHITE);
+        JButton cancel = new JButton("Cancel");
+        cancel.addActionListener(e -> dialog.dispose());
+
+        JButton placeBtn = makeButton("Place Order", COL_PRI, Color.WHITE);
+        placeBtn.addActionListener(e -> {
+            String merchantId = merchantField.getText().trim();
+            String[] lines    = itemsArea.getText().trim().split("\n");
+
+            // Parse items
+            List<Object[]> items = new java.util.ArrayList<>();
+            for (String line : lines) {
+                String[] parts = line.split(",");
+                if (parts.length == 2) {
+                    String saId = parts[0].trim();
+                    String qty  = parts[1].trim();
+                    try {
+                        items.add(new Object[]{ saId, Integer.parseInt(qty) });
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+
+            if (items.isEmpty()) {
+                JOptionPane.showMessageDialog(dialog,
+                    "Enter at least one valid item line.", "Validation Error",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Fire the API stub — prints to terminal
+            dialog.dispose();
+            String result = crossSystem.submitOrderToIposSa(merchantId, items);
+
+            if (result != null) {
+                JOptionPane.showMessageDialog(this,
+                    "Order submitted. Reference: " + result, "Order Placed",
+                    JOptionPane.INFORMATION_MESSAGE);
+                loadOrders();
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Order submitted to terminal (API not yet connected).\n"
+                    + "Check the IntelliJ console for the API call details.",
+                    "API Stub — Check Console", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+
+        btnRow.add(cancel);
+        btnRow.add(placeBtn);
+        panel.add(btnRow, BorderLayout.SOUTH);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
     }
 
     private JLabel makeSumLabel(String t) {
@@ -351,11 +581,13 @@ class UserManagementPanel extends JPanel {
         JMenuItem changeRole   = new JMenuItem("Change Role");
         JMenuItem deactivate   = new JMenuItem("Deactivate Account");
         JMenuItem reactivate   = new JMenuItem("Reactivate Account");
+        JMenuItem deleteUser   = new JMenuItem("Delete Account Permanently");
+        deleteUser.setForeground(new Color(0xEF4444));
         changeRole.addActionListener(e -> changeSelectedUserRole());
         deactivate.addActionListener(e -> deactivateSelectedUser());
         reactivate.addActionListener(e -> reactivateSelectedUser());
+        deleteUser.addActionListener(e -> deleteSelectedUser());
 
-        // Show relevant menu items based on current active status
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
                 int row = table.getSelectedRow();
@@ -372,13 +604,15 @@ class UserManagementPanel extends JPanel {
         menu.add(changeRole);
         menu.add(deactivate);
         menu.add(reactivate);
+        menu.addSeparator();
+        menu.add(deleteUser);
         table.setComponentPopupMenu(menu);
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(new LineBorder(COL_BORDER, 1, true));
         panel.add(scroll, BorderLayout.CENTER);
 
-        JLabel hint = new JLabel("Right-click a user to change role, deactivate, or reactivate.");
+        JLabel hint = new JLabel("Right-click a user to change role, deactivate, reactivate, or delete.");
         hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
         hint.setForeground(new Color(0xAAAAAA));
         hint.setBorder(new EmptyBorder(6, 4, 0, 0));
@@ -462,6 +696,53 @@ class UserManagementPanel extends JPanel {
             loadUsers();
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage());
+        }
+    }
+
+    /** Permanently delete a user account — two-step confirmation */
+    private void deleteSelectedUser() {
+        int row = table.getSelectedRow();
+        if (row < 0) return;
+        int userId    = (int)    model.getValueAt(row, 0);
+        String name   = (String) model.getValueAt(row, 2);
+        String username = (String) model.getValueAt(row, 1);
+
+        // Two-step confirmation for a destructive action
+        int first = JOptionPane.showConfirmDialog(this,
+            "Permanently delete account for " + name + " (@" + username + ")?\n\n"
+            + "⚠  This cannot be undone.\n"
+            + "   If this user has sales records, deletion will fail.\n"
+            + "   Consider deactivating instead.",
+            "Delete User Account", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (first != JOptionPane.YES_OPTION) return;
+
+        int second = JOptionPane.showConfirmDialog(this,
+            "Are you absolutely sure you want to delete " + name + "?\n"
+            + "This will permanently remove their account from the system.",
+            "Confirm Permanent Delete", JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE);
+        if (second != JOptionPane.YES_OPTION) return;
+
+        try {
+            boolean deleted = userDAO.deleteUser(userId);
+            if (deleted) {
+                JOptionPane.showMessageDialog(this,
+                    name + "'s account has been permanently deleted.",
+                    "Deleted", JOptionPane.INFORMATION_MESSAGE);
+                loadUsers();
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Delete failed — user not found.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (SQLException ex) {
+            // FK constraint error means they have linked sales records
+            if (ex.getMessage().contains("foreign key") || ex.getMessage().contains("constraint")) {
+                JOptionPane.showMessageDialog(this,
+                    "Cannot delete " + name + " — they have linked sales records.\n"
+                    + "Deactivate their account instead to preserve data integrity.",
+                    "Cannot Delete", JOptionPane.WARNING_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage());
+            }
         }
     }
 
@@ -1144,5 +1425,421 @@ class SettingsPanel extends JPanel {
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage());
         }
+    }
+}
+
+
+// =============================================================
+// ONLINE SALES PANEL — IPOS-PU interaction
+// Shows online sales received from IPOS-PU and pending payments
+// =============================================================
+
+// =============================================================
+// ONLINE SALES PANEL — IPOS-PU interaction
+//
+// TOP  — Incoming online sales from IPOS-PU
+//         Receive sale + delivery address, maintain status
+//         RECEIVED → PICKING → DISPATCHED → DELIVERED
+//
+// BOT  — Outgoing card payment details to IPOS-PU
+//         We send card details so PU can clear on their end
+//         Mark as reconciled once PU confirms
+// =============================================================
+class OnlineSalesPanel extends JPanel {
+
+    private static final Color COL_BG     = new Color(0xF5F7FA);
+    private static final Color COL_WHITE  = Color.WHITE;
+    private static final Color COL_PRI    = new Color(0x1A6B3C);
+    private static final Color COL_BORDER = new Color(0xD6E4DC);
+    private static final Color COL_SUB    = new Color(0x6B7C72);
+    private static final Color COL_TEXT   = new Color(0x1C2B20);
+
+    private final service.CrossSystemService crossSystem = new service.CrossSystemService();
+
+    private DefaultTableModel onlineSalesModel;
+    private JTable            onlineSalesTable;
+    private DefaultTableModel cardPaymentsModel;
+    private JTable            cardPaymentsTable;
+    private JLabel            statusLabel;
+
+    public OnlineSalesPanel() {
+        setLayout(new BorderLayout(0, 0));
+        setBackground(COL_BG);
+        add(buildStatusBar(), BorderLayout.NORTH);
+        add(buildContent(),   BorderLayout.CENTER);
+        initialLoad();
+    }
+
+    // ---------------------------------------------------------------
+    // STATUS BAR
+    // ---------------------------------------------------------------
+    private JPanel buildStatusBar() {
+        JPanel bar = new JPanel(new BorderLayout(12, 0));
+        bar.setBackground(COL_WHITE);
+        bar.setBorder(new CompoundBorder(
+            new LineBorder(COL_BORDER,1,true), new EmptyBorder(10,16,10,16)));
+
+        statusLabel = new JLabel("Checking IPOS-PU connection...");
+        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        statusLabel.setForeground(COL_SUB);
+        bar.add(statusLabel, BorderLayout.WEST);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        btns.setBackground(COL_WHITE);
+
+        JButton refreshBtn = makeBtn("Refresh", new Color(0xE8F5EE), COL_PRI, true);
+        refreshBtn.addActionListener(e -> { loadOnlineSales(); loadCardPayments(); });
+
+        JButton syncBtn = makeBtn("Sync Online Sales from PU", COL_PRI, Color.WHITE, false);
+        syncBtn.addActionListener(e -> syncOnlineSales());
+
+        btns.add(refreshBtn);
+        btns.add(syncBtn);
+        bar.add(btns, BorderLayout.EAST);
+        return bar;
+    }
+
+    // ---------------------------------------------------------------
+    // CONTENT — two panels
+    // ---------------------------------------------------------------
+    private JPanel buildContent() {
+        JPanel panel = new JPanel(new GridLayout(2, 1, 0, 12));
+        panel.setBackground(COL_BG);
+        panel.setBorder(new EmptyBorder(12, 0, 0, 0));
+        panel.add(buildOnlineSalesSection());
+        panel.add(buildCardPaymentsSection());
+        return panel;
+    }
+
+    // ---------------------------------------------------------------
+    // TOP — online sales from PU with status management
+    // ---------------------------------------------------------------
+    private JPanel buildOnlineSalesSection() {
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        panel.setBackground(COL_WHITE);
+        panel.setBorder(new CompoundBorder(
+            new LineBorder(COL_BORDER,1,true), new EmptyBorder(14,16,10,16)));
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(COL_WHITE);
+        JLabel heading = new JLabel("Online Sales Received from IPOS-PU");
+        heading.setFont(new Font("Georgia", Font.BOLD, 13));
+        heading.setForeground(COL_TEXT);
+        header.add(heading, BorderLayout.WEST);
+
+        JButton updateBtn = makeBtn("Update Status", new Color(0xE8F5EE), COL_PRI, true);
+        updateBtn.addActionListener(e -> updateSelectedSaleStatus());
+        header.add(updateBtn, BorderLayout.EAST);
+        panel.add(header, BorderLayout.NORTH);
+
+        String[] cols = {"Sale ID","Items","Total (£)","Delivery Address","Status","Date"};
+        onlineSalesModel = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        onlineSalesTable = makeTable(onlineSalesModel);
+
+        // Colour status column
+        onlineSalesTable.getColumnModel().getColumn(4).setCellRenderer(
+            new DefaultTableCellRenderer() {
+                @Override public Component getTableCellRendererComponent(JTable t, Object v,
+                        boolean sel, boolean foc, int r, int c) {
+                    JLabel l = (JLabel) super.getTableCellRendererComponent(t,v,sel,foc,r,c);
+                    l.setFont(new Font("SansSerif", Font.BOLD, 12));
+                    if (!sel) switch (v == null ? "" : v.toString()) {
+                        case "RECEIVED":   l.setForeground(new Color(0x3B82F6)); break;
+                        case "PICKING":    l.setForeground(new Color(0xF59E0B)); break;
+                        case "DISPATCHED": l.setForeground(new Color(0x8B5CF6)); break;
+                        case "DELIVERED":  l.setForeground(new Color(0x22C55E)); break;
+                        default:           l.setForeground(COL_TEXT);
+                    }
+                    return l;
+                }
+            });
+
+        int[] w1 = {60,200,90,230,100,100};
+        for (int i = 0; i < w1.length; i++)
+            onlineSalesTable.getColumnModel().getColumn(i).setPreferredWidth(w1[i]);
+
+        panel.add(new JScrollPane(onlineSalesTable), BorderLayout.CENTER);
+
+        JLabel hint = new JLabel("Select a row and click Update Status to progress: RECEIVED → PICKING → DISPATCHED → DELIVERED");
+        hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
+        hint.setForeground(COL_SUB);
+        panel.add(hint, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    // ---------------------------------------------------------------
+    // BOTTOM — card payment details we send to PU for clearance
+    // ---------------------------------------------------------------
+    private JPanel buildCardPaymentsSection() {
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        panel.setBackground(COL_WHITE);
+        panel.setBorder(new CompoundBorder(
+            new LineBorder(COL_BORDER,1,true), new EmptyBorder(14,16,10,16)));
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(COL_WHITE);
+        JLabel heading = new JLabel("Card Payment Details — Send to IPOS-PU for Clearance");
+        heading.setFont(new Font("Georgia", Font.BOLD, 13));
+        heading.setForeground(COL_TEXT);
+        header.add(heading, BorderLayout.WEST);
+
+        JButton reconcileBtn = makeBtn("Mark Reconciled", new Color(0xE8F5EE), COL_PRI, true);
+        reconcileBtn.addActionListener(e -> reconcileSelectedPayment());
+        header.add(reconcileBtn, BorderLayout.EAST);
+        panel.add(header, BorderLayout.NORTH);
+
+        String[] cols = {"Sale ID","Invoice","Amount (£)","Card Type","First 4","Last 4","Expiry","Date","Reconciled"};
+        cardPaymentsModel = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        cardPaymentsTable = makeTable(cardPaymentsModel);
+
+        // Colour reconciled column
+        cardPaymentsTable.getColumnModel().getColumn(8).setCellRenderer(
+            new DefaultTableCellRenderer() {
+                @Override public Component getTableCellRendererComponent(JTable t, Object v,
+                        boolean sel, boolean foc, int r, int c) {
+                    JLabel l = (JLabel) super.getTableCellRendererComponent(t,v,sel,foc,r,c);
+                    l.setFont(new Font("SansSerif", Font.BOLD, 12));
+                    if (!sel) {
+                        l.setForeground("YES".equals(v)
+                            ? new Color(0x22C55E) : new Color(0xF59E0B));
+                        l.setBackground(COL_WHITE);
+                    }
+                    return l;
+                }
+            });
+
+        int[] w2 = {60,110,90,90,70,70,70,100,90};
+        for (int i = 0; i < w2.length; i++)
+            cardPaymentsTable.getColumnModel().getColumn(i).setPreferredWidth(w2[i]);
+
+        panel.add(new JScrollPane(cardPaymentsTable), BorderLayout.CENTER);
+
+        JLabel hint = new JLabel("Card details from all CARD sales are listed here. Share with IPOS-PU so they can clear the payment, then mark as reconciled.");
+        hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
+        hint.setForeground(COL_SUB);
+        panel.add(hint, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    // ---------------------------------------------------------------
+    // Data loading
+    // ---------------------------------------------------------------
+    private void initialLoad() {
+        SwingWorker<Boolean, Void> w = new SwingWorker<Boolean, Void>() {
+            @Override protected Boolean doInBackground() { return crossSystem.isIposPuReachable(); }
+            @Override protected void done() {
+                try {
+                    boolean ok = get();
+                    statusLabel.setText(ok ? "✓ Connected to IPOS-PU" :
+                        "⚠ IPOS-PU not reachable — update schema name in CrossSystemService.java");
+                    statusLabel.setForeground(ok ? new Color(0x22C55E) : new Color(0xF59E0B));
+                } catch (Exception ignored) {}
+                loadOnlineSales();
+                loadCardPayments();
+            }
+        };
+        w.execute();
+    }
+
+    private void loadOnlineSales() {
+        SwingWorker<java.util.List<Object[]>, Void> w =
+            new SwingWorker<java.util.List<Object[]>, Void>() {
+                @Override protected java.util.List<Object[]> doInBackground() throws Exception {
+                    return crossSystem.getOnlineSalesWithStatus();
+                }
+                @Override protected void done() {
+                    try {
+                        onlineSalesModel.setRowCount(0);
+                        for (Object[] row : get()) onlineSalesModel.addRow(row);
+                    } catch (Exception ignored) {}
+                }
+            };
+        w.execute();
+    }
+
+    private void loadCardPayments() {
+        SwingWorker<java.util.List<Object[]>, Void> w =
+            new SwingWorker<java.util.List<Object[]>, Void>() {
+                @Override protected java.util.List<Object[]> doInBackground() throws Exception {
+                    java.util.List<Object[]> rows = new java.util.ArrayList<>();
+                    // Try with pu_reconciled column first; fall back if column doesn't exist yet
+                    String[] sqls = {
+                        "SELECT sale_id, invoice_number, total_amount, card_type, "
+                        + "card_first_four, card_last_four, card_expiry, sale_timestamp, "
+                        + "pu_reconciled FROM sales WHERE payment_method = 'CARD' ORDER BY sale_id DESC LIMIT 100",
+                        "SELECT sale_id, invoice_number, total_amount, card_type, "
+                        + "card_first_four, card_last_four, card_expiry, sale_timestamp, "
+                        + "FALSE AS pu_reconciled FROM sales WHERE payment_method = 'CARD' ORDER BY sale_id DESC LIMIT 100"
+                    };
+                    for (String sql : sqls) {
+                        try (java.sql.PreparedStatement ps =
+                                database.DatabaseConnection.getConnection().prepareStatement(sql)) {
+                            java.sql.ResultSet rs = ps.executeQuery();
+                            while (rs.next()) {
+                                rows.add(new Object[]{
+                                    rs.getInt("sale_id"),
+                                    rs.getString("invoice_number"),
+                                    "£" + String.format("%.2f", rs.getBigDecimal("total_amount")),
+                                    nvl(rs.getString("card_type")),
+                                    nvl(rs.getString("card_first_four")),
+                                    nvl(rs.getString("card_last_four")),
+                                    nvl(rs.getString("card_expiry")),
+                                    rs.getTimestamp("sale_timestamp")
+                                        .toLocalDateTime().toLocalDate().toString(),
+                                    rs.getBoolean("pu_reconciled") ? "YES" : "NO"
+                                });
+                            }
+                            break; // success — don't try fallback
+                        } catch (java.sql.SQLException ex) {
+                            rows.clear(); // try next SQL
+                        }
+                    }
+                    return rows;
+                }
+                @Override protected void done() {
+                    try {
+                        cardPaymentsModel.setRowCount(0);
+                        for (Object[] row : get()) cardPaymentsModel.addRow(row);
+                    } catch (Exception ignored) {}
+                }
+            };
+        w.execute();
+    }
+
+    private String nvl(String s) { return s != null ? s : "—"; }
+
+    // ---------------------------------------------------------------
+    // Actions
+    // ---------------------------------------------------------------
+    private void syncOnlineSales() {
+        statusLabel.setText("Syncing...");
+        statusLabel.setForeground(COL_SUB);
+        SwingWorker<Integer, Void> w = new SwingWorker<Integer, Void>() {
+            @Override protected Integer doInBackground() { return crossSystem.processOnlineSales(); }
+            @Override protected void done() {
+                try {
+                    int n = get();
+                    statusLabel.setText("✓ Synced " + n + " sale(s) from IPOS-PU");
+                    statusLabel.setForeground(new Color(0x22C55E));
+                    loadOnlineSales();
+                    loadCardPayments();
+                } catch (Exception ex) {
+                    statusLabel.setText("✗ Sync failed — IPOS-PU may not be reachable");
+                    statusLabel.setForeground(new Color(0xEF4444));
+                }
+            }
+        };
+        w.execute();
+    }
+
+    private void updateSelectedSaleStatus() {
+        int row = onlineSalesTable.getSelectedRow();
+        if (row < 0) { JOptionPane.showMessageDialog(this, "Select an online sale first."); return; }
+        int saleId = (int) onlineSalesModel.getValueAt(row, 0);
+        String current = (String) onlineSalesModel.getValueAt(row, 4);
+        String[] statuses = {"RECEIVED", "PICKING", "DISPATCHED", "DELIVERED"};
+        String chosen = (String) JOptionPane.showInputDialog(this,
+            "Update status for Sale #" + saleId + ":\nCurrent: " + current,
+            "Update Sale Status", JOptionPane.PLAIN_MESSAGE, null, statuses, current);
+        if (chosen == null || chosen.equals(current)) return;
+        try {
+            crossSystem.updateOnlineSaleStatus(saleId, chosen);
+            loadOnlineSales();
+        } catch (java.sql.SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        }
+    }
+
+    private void reconcileSelectedPayment() {
+        int row = cardPaymentsTable.getSelectedRow();
+        if (row < 0) { JOptionPane.showMessageDialog(this, "Select a payment first."); return; }
+        int saleId = (int) cardPaymentsModel.getValueAt(row, 0);
+        if ("YES".equals(cardPaymentsModel.getValueAt(row, 8))) {
+            JOptionPane.showMessageDialog(this, "Already reconciled."); return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Reconcile card payment for Sale #" + saleId + "?\n\n"
+            + "This will:\n"
+            + "  1. POST card details to IPOS-PU (they forward to PayPal)\n"
+            + "  2. Check clearance status from IPOS-PU\n"
+            + "  3. Mark as reconciled if cleared",
+            "Confirm Reconciliation", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        SwingWorker<String, Void> w = new SwingWorker<String, Void>() {
+            @Override protected String doInBackground() throws Exception {
+                return crossSystem.reconcileCardPayment(saleId);
+            }
+            @Override protected void done() {
+                try {
+                    String status = get();
+                    switch (status) {
+                        case "CLEARED":
+                            JOptionPane.showMessageDialog(OnlineSalesPanel.this,
+                                "✓ Payment CLEARED by IPOS-PU / PayPal.\n"
+                                + "Sale #" + saleId + " marked as reconciled.",
+                                "Payment Cleared", JOptionPane.INFORMATION_MESSAGE);
+                            loadCardPayments();
+                            break;
+                        case "PENDING":
+                            JOptionPane.showMessageDialog(OnlineSalesPanel.this,
+                                "⏳ Payment still PENDING with PayPal.\n"
+                                + "Try again in a few minutes.",
+                                "Payment Pending", JOptionPane.WARNING_MESSAGE);
+                            break;
+                        case "REJECTED":
+                            JOptionPane.showMessageDialog(OnlineSalesPanel.this,
+                                "✗ Payment REJECTED by payment processor.\n"
+                                + "Contact the customer — their card was declined.",
+                                "Payment Rejected", JOptionPane.ERROR_MESSAGE);
+                            break;
+                        default:
+                            JOptionPane.showMessageDialog(OnlineSalesPanel.this,
+                                "Status: " + status + "\nCheck the console for details.",
+                                "Result", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(OnlineSalesPanel.this,
+                        "Error: " + ex.getMessage());
+                }
+            }
+        };
+        w.execute();
+    }
+
+    // ---------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------
+    private JTable makeTable(DefaultTableModel m) {
+        JTable t = new JTable(m);
+        t.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        t.setRowHeight(32); t.setShowGrid(false);
+        t.setBackground(COL_WHITE); t.setSelectionBackground(new Color(0xE8F5EE));
+        t.setFillsViewportHeight(true);
+        t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
+        t.getTableHeader().setBackground(new Color(0xF1F5F9));
+        return t;
+    }
+
+    private JButton makeBtn(String text, Color bg, Color fg, boolean bordered) {
+        JButton b = new JButton(text);
+        b.setFont(new Font("SansSerif", Font.BOLD, 12));
+        b.setBackground(bg); b.setForeground(fg);
+        b.setFocusPainted(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        if (bordered) {
+            b.setBorder(new CompoundBorder(
+                new LineBorder(COL_BORDER,1,true), new EmptyBorder(5,12,5,12)));
+            b.setBorderPainted(true);
+        } else {
+            b.setBorderPainted(false);
+            b.setBorder(new EmptyBorder(7,14,7,14));
+        }
+        return b;
     }
 }
