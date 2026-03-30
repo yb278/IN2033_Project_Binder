@@ -51,9 +51,9 @@ CREATE TABLE users (
     updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Default admin account (password: admin123 – change before demo)
+-- Default admin account
 INSERT INTO users (username, password_hash, first_name, last_name, role)
-VALUES ('admin', 'admin123', 'System', 'Admin', 'ADMIN');
+VALUES ('sysdba', 'masterkey', 'System', 'Admin', 'ADMIN');
 
 -- -------------------------------------------------------------
 -- DISCOUNT PLANS

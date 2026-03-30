@@ -34,21 +34,12 @@ WHERE id = 1;
 -- In production these must be BCrypt hashes.
 -- =============================================================
 
--- Updated the schema's default admin account to sysdba
-UPDATE users SET
-                 username      = 'sysdba',
-                 password_hash = 'masterkey',
-                 first_name    =  'System',
-                 last_name     = 'Administrator',
-                 role          = 'ADMIN',
-                 is_active     = TRUE
-WHERE id = 1;
 
 -- Remaining staff accounts
-INSERT INTO users (username, password_hash, first_name, last_name, role, is_active) VALUES
-                                                                                        ('manager',    'Get_it_done', 'Alex',   'Wright', 'MANAGER',    TRUE),  -- Director of Operations / Manager
-                                                                                        ('accountant', 'Count_money', 'Claire', 'Stone',  'ACCOUNTANT', TRUE),  -- Senior Accountant
-                                                                                        ('clerk',      'Paperwork',   'Tom',    'Baker',  'CLERK',      TRUE);  -- Accountant (clerk level)
+INSERT INTO users (username, password_hash, first_name, last_name, role) VALUES
+                                                                             ('manager',    'Get_it_done', 'Alex',   'Wright', 'MANAGER'),      -- Director of Operations
+                                                                             ('accountant', 'Count_money', 'Claire', 'Stone',  'MANAGER'),      -- Senior Accountant → MANAGER role
+                                                                             ('clerk',      'Paperwork',   'Tom',    'Baker',  'PHARMACIST');   -- Clerk → PHARMACIST role
 
 -- =============================================================
 -- 3. DISCOUNT PLANS
