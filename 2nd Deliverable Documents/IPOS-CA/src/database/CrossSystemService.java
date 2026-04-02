@@ -501,17 +501,11 @@ public class CrossSystemService {
      * (e.g. a simple HttpServer or Spring Boot) exposing this endpoint.
      * IPOS-PU calls it to populate their online store.
      */
-    public void logStockExposureToIposPu() throws SQLException {
-        List<StockItem> items = stockDAO.getAllStockItems();
+    public String getStockCatalogueJsonForPu() {
+        String json = StockApiService.getStockAsJson();
         System.out.println("[API←PU] IPOS-PU would GET our stock catalogue");
-        System.out.println("[API←PU] We would return " + items.size() + " items as JSON:");
-        for (StockItem item : items) {
-            System.out.println("[API←PU]   { \"id\": " + item.getStockItemId()
-                + ", \"saItemId\": \"" + item.getSaItemId()
-                + "\", \"description\": \"" + item.getDescription()
-                + "\", \"qty\": " + item.getQuantityAvailable()
-                + ", \"retailPrice\": " + item.getRetailPriceExVAT() + " }");
-        }
+        System.out.println("[API←PU] JSON payload: " + json);
+        return json;
     }
 
     /**
