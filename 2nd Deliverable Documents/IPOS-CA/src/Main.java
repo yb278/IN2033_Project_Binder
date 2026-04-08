@@ -1,5 +1,12 @@
 import gui.LoginFrame;
+import service.CrossSystemService;
+import service.StockApiService;
+import service.StockApiServer;
+
 import javax.swing.*;
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * Main
@@ -11,6 +18,10 @@ import javax.swing.*;
  */
 public class Main {
     public static void main(String[] args) {
+
+        StockApiServer api = new StockApiServer();
+        api.start();
+
         SwingUtilities.invokeLater(() -> {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -19,3 +30,9 @@ public class Main {
         });
     }
 }
+
+
+
+
+
+
