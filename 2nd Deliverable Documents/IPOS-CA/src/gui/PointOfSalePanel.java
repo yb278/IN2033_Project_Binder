@@ -553,9 +553,13 @@ public class PointOfSalePanel extends JPanel {
         BigDecimal discount = BigDecimal.ZERO;
         if (selectedHolder != null) {
             try {
+                // For FLEXIBLE plans the tier is determined by cumulative monthly spend
+                // including THIS purchase — so we add the current basket subtotal
+                // to whatever they've already spent this month.
+                BigDecimal cumulativeMonthly = selectedHolder.getMonthlyOrderTotal()
+                    .add(subtotal);
                 discount = discountPlanDAO.calculateDiscount(
-                    selectedHolder.getDiscountPlanId(), subtotal,
-                    selectedHolder.getMonthlyOrderTotal());
+                    selectedHolder.getDiscountPlanId(), subtotal, cumulativeMonthly);
             } catch (SQLException ignored) {}
         }
 

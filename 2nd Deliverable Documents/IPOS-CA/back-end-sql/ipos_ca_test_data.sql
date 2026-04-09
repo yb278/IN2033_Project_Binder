@@ -50,9 +50,11 @@ INSERT INTO users (username, password_hash, first_name, last_name, role) VALUES
 --             Tier thresholds and rates are enforced by application logic.
 -- =============================================================
 
-INSERT INTO discount_plans (plan_name, plan_type, fixed_rate) VALUES
-                                                                  ('Fixed 3%',        'FIXED',  3.00),
-                                                                  ('Variable Volume', 'VOLUME', 0.00);
+INSERT INTO discount_plans (plan_name, plan_type, fixed_rate) VALUES ('No Discount', 'FIXED', 0.00);
+INSERT INTO discount_plans (plan_name, plan_type, fixed_rate) VALUES ('Fixed 3%', 'FIXED', 3.00);
+INSERT INTO discount_plans (plan_name, plan_type, flexible_tiers)
+VALUES ('Variable Volume Discount', 'FLEXIBLE',
+        '[{"min":0,"max":100,"rate":0.0},{"min":100,"max":300,"rate":1.0},{"min":300,"max":999999,"rate":2.0}]');
 
 -- =============================================================
 -- 4. STOCK ITEMS — Cosymed Ltd local stock (spec p.8)
