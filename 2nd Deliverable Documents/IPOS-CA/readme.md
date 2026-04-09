@@ -24,10 +24,9 @@
 5. On Windows, MySQL runs as a service automatically after install
 
 **Verify MySQL is running:**
-```
+```bash
 # Windows
 net start mysql80
-
 ```
 
 ---
@@ -35,7 +34,7 @@ net start mysql80
 ## Step 2 — Set up the database
 
 Open a terminal and log into MySQL:
-```
+```bash
 mysql -u root -p
 ```
 Enter your root password when prompted.
@@ -45,7 +44,7 @@ Then run both SQL files **in order**:
 source /root/back-end-sql/ipos_ca_schema.sql
 source /root/back-end-sql/ipos_ca_test_data.sql
 ```
-> On Windows use forward slashes: `source C:/Users/YourName/Downloads/IPOS_CA/sql/ipos_ca_schema.sql`
+> On Windows use forward slashes: `source C:/Users/YourName/Downloads/IPOS_CA/back-end-sql/ipos_ca_schema.sql`
 
 Verify it worked:
 ```sql
@@ -135,9 +134,48 @@ Use any of these test accounts:
 
 ---
 
+# IPOS-CA Stock API
+
+This is the stock API layer for IPOS-CA.
+
+It exposes the pharmacy stock catalogue as JSON so other IPOS subsystems can access it during integration.
+
+The stock data is retrieved from the IPOS-CA MySQL database using `StockDAO`, converted into JSON, and exposed through a simple HTTP endpoint.
+
+## What it does
+
+- Connects to the IPOS-CA MySQL database
+- Reads stock data from the `stock_items` table
+- Converts stock data into JSON format
+- Exposes a GET endpoint for external systems to call
+
+## Endpoint
+
+### Get Stock Catalogue
+`GET /api/stock`
+
+Local URL:  
+`http://localhost:8085/api/stock`
+
+Network URL (for other systems):  
+`http://<IPOS-CA-IP>:8085/api/stock`
+
+### Example Response
+```json
+[
+  {
+    "stockItemId": 1,
+    "saItemId": "100 00001",
+    "description": "Paracetamol",
+    "quantityAvailable": 121,
+    "minStockLevel": 10
+  }
+]
+```
+
 ## Project structure reference
 
-```
+```text
 IPOS_CA/
 │
 ├── back-end-sql/
@@ -172,7 +210,9 @@ IPOS_CA/
     │   └── MerchantSettingsDAO.java
     │
     ├── service/
-    │   └── AccountStatusService.java  ← Auto account status logic
+    │   ├── AccountStatusService.java
+    │   ├── StockApiServer.java
+    │   └── StockApiService.java
     │
     └── gui/                    ← All Swing screens
         ├── LoginFrame.java
@@ -189,19 +229,19 @@ IPOS_CA/
 
 ## Common errors and fixes
 
-**"Can't connect to MySQL server on localhost:3306"**
+**"Can't connect to MySQL server on localhost:3306"**  
 → MySQL is not running. Run `net start mysql80` (Windows) or `sudo systemctl start mysql` (Mac/Linux)
 
-**"Access denied for user root"**
+**"Access denied for user root"**  
 → Wrong password in `DatabaseConnection.java`. Double-check `DB_PASSWORD`.
 
-**"MySQL JDBC driver not found"**
+**"MySQL JDBC driver not found"**  
 → The `mysql-connector-j.jar` has not been added to the project libraries. Repeat Step 5.
 
-**"Table ipos_ca.users doesn't exist"**
+**"Table ipos_ca.users doesn't exist"**  
 → The schema SQL hasn't been run. Repeat Step 2.
 
-**Compilation errors about classes not found**
+**Compilation errors about classes not found**  
 → Make sure `src` is marked as Sources Root (Step 4) and all packages are correct.
 
 ---
