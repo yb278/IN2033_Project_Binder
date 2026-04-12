@@ -37,9 +37,9 @@ WHERE id = 1;
 
 -- Remaining staff accounts
 INSERT INTO users (username, password_hash, first_name, last_name, role) VALUES
-                                                                             ('manager',    'Get_it_done', 'Alex',   'Wright', 'MANAGER'),      -- Director of Operations
-                                                                             ('accountant', 'Count_money', 'Claire', 'Stone',  'MANAGER'),      -- Senior Accountant → MANAGER role
-                                                                             ('clerk',      'Paperwork',   'Tom',    'Baker',  'PHARMACIST');   -- Clerk → PHARMACIST role
+                                                                             ('manager',    'Get_it_done', 'Manager',   '', 'MANAGER'),      -- Director of Operations
+                                                                             ('accountant', 'Count_money', 'Accountant', '',  'MANAGER'),      -- Senior Accountant → MANAGER role
+                                                                             ('clerk',      'Paperwork',   'Clerk',    '',  'PHARMACIST');   -- Clerk → PHARMACIST role
 
 -- =============================================================
 -- 3. DISCOUNT PLANS
@@ -151,7 +151,7 @@ INSERT INTO account_holder_payments (holder_id, amount, payment_date, notes) VAL
 -- Eva Bauyer — prior balance cleared before March purchases (amount not specified in spec)
 (1,   0.00, '2026-02-28 10:00:00', 'Balance cleared; last payment before current outstanding period'),
 -- Glynne Morrison — full balance cleared by credit card
-(2, 147.71, '2026-03-29 14:00:00', 'Full balance of £147.71 cleared by credit card');
+(2, 147.71, '2026-03-29 14:00:00', 'Full balance cleared by credit card');
 
 -- =============================================================
 -- 7. ORDERS TO IPOS-SA — Cosymed Ltd orders placed with InfoPharma

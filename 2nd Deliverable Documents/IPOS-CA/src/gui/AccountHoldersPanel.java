@@ -45,7 +45,8 @@ public class AccountHoldersPanel extends JPanel {
     private DefaultTableModel  tableModel;
     private JLabel             detailName, detailStatus, detailBalance, detailCredit;
     private JButton            editBtn, recordPaymentBtn, setCreditBtn,
-                               applyDiscountBtn, updateStatusBtn, deleteHolderBtn;
+                               applyDiscountBtn, updateStatusBtn, deleteHolderBtn,
+                               viewPaymentsBtn;
 
     // Holds the holder_id of whichever row is selected
     private int selectedHolderId = -1;
@@ -226,6 +227,7 @@ public class AccountHoldersPanel extends JPanel {
 
         editBtn          = makeActionButton("✏  Edit Details",        new Color(0x3B82F6));
         recordPaymentBtn = makeActionButton("💰  Record Payment",      new Color(0x22C55E));
+        viewPaymentsBtn  = makeActionButton("📋  Payment History",     new Color(0x0EA5E9));
         setCreditBtn     = makeActionButton("💳  Set Credit Limit",    new Color(0x8B5CF6));
         applyDiscountBtn = makeActionButton("🏷  Apply Discount Plan", new Color(0xF59E0B));
         updateStatusBtn  = makeActionButton("🔄  Update Status",       new Color(0xEF4444));
@@ -233,12 +235,13 @@ public class AccountHoldersPanel extends JPanel {
 
         editBtn.addActionListener(e -> openEditDialog());
         recordPaymentBtn.addActionListener(e -> openRecordPaymentDialog());
+        viewPaymentsBtn.addActionListener(e -> openPaymentHistoryDialog());
         setCreditBtn.addActionListener(e -> openSetCreditDialog());
         applyDiscountBtn.addActionListener(e -> openApplyDiscountDialog());
         updateStatusBtn.addActionListener(e -> openUpdateStatusDialog());
         deleteHolderBtn.addActionListener(e -> deleteSelectedHolder());
 
-        for (JButton btn : new JButton[]{editBtn, recordPaymentBtn,
+        for (JButton btn : new JButton[]{editBtn, recordPaymentBtn, viewPaymentsBtn,
                 setCreditBtn, applyDiscountBtn, updateStatusBtn}) {
             btn.setEnabled(false);
             panel.add(btn);
@@ -503,8 +506,77 @@ public class AccountHoldersPanel extends JPanel {
     @FunctionalInterface
     interface DaoCall<T> { T execute() throws Exception; }
 
+    /** CA-10: View full payment history for the selected account holder */
+    private void openPaymentHistoryDialog() {
+        if (selectedHolderId < 0) return;
+        String name = detailName.getText();
+
+        JDialog dialog = new JDialog(
+            (java.awt.Frame) SwingUtilities.getWindowAncestor(this),
+            "Payment History — " + name, true);
+        dialog.setSize(580, 340);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        panel.setBorder(new EmptyBorder(16, 16, 16, 16));
+        panel.setBackground(Color.WHITE);
+
+        JLabel heading = new JLabel("Payment history for " + name);
+        heading.setFont(new Font("SansSerif", Font.BOLD, 13));
+        panel.add(heading, BorderLayout.NORTH);
+
+        String[] cols = {"Payment ID", "Amount (£)", "Date", "Notes"};
+        DefaultTableModel m = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+
+        try {
+            List<Object[]> rows = accountHolderDAO.getPaymentHistory(selectedHolderId);
+            if (rows.isEmpty()) {
+                JLabel empty = new JLabel("No payment records found.", SwingConstants.CENTER);
+                empty.setFont(new Font("SansSerif", Font.ITALIC, 13));
+                empty.setForeground(new Color(0x999999));
+                panel.add(empty, BorderLayout.CENTER);
+            } else {
+                for (Object[] row : rows) {
+                    m.addRow(new Object[]{
+                        row[0],
+                        String.format("£%.2f", ((java.math.BigDecimal) row[1])),
+                        row[2],
+                        row[3]
+                    });
+                }
+                JTable t = new JTable(m);
+                t.setFont(new Font("SansSerif", Font.PLAIN, 13));
+                t.setRowHeight(30); t.setShowGrid(false);
+                t.setBackground(Color.WHITE);
+                t.setFillsViewportHeight(true);
+                t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
+                t.getTableHeader().setBackground(new Color(0xF1F5F9));
+                t.getColumnModel().getColumn(0).setPreferredWidth(80);
+                t.getColumnModel().getColumn(1).setPreferredWidth(100);
+                t.getColumnModel().getColumn(2).setPreferredWidth(100);
+                t.getColumnModel().getColumn(3).setPreferredWidth(280);
+                panel.add(new JScrollPane(t), BorderLayout.CENTER);
+            }
+        } catch (java.sql.SQLException ex) {
+            JLabel err = new JLabel("DB error: " + ex.getMessage(), SwingConstants.CENTER);
+            panel.add(err, BorderLayout.CENTER);
+        }
+
+        JButton close = new JButton("Close");
+        close.addActionListener(e -> dialog.dispose());
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnRow.setBackground(Color.WHITE);
+        btnRow.add(close);
+        panel.add(btnRow, BorderLayout.SOUTH);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
+    }
+
     private void setDetailEnabled(boolean enabled) {
-        for (JButton btn : new JButton[]{editBtn, recordPaymentBtn,
+        for (JButton btn : new JButton[]{editBtn, recordPaymentBtn, viewPaymentsBtn,
                 setCreditBtn, applyDiscountBtn, updateStatusBtn, deleteHolderBtn})
             btn.setEnabled(enabled);
     }

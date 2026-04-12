@@ -197,6 +197,32 @@ public class AccountHolderDAO {
         }
     }
 
+    /**
+     * Returns the full payment history for an account holder,
+     * ordered most recent first.
+     * Each row: [paymentId, amount, paymentDate, notes]
+     */
+    public List<Object[]> getPaymentHistory(int holderId) throws SQLException {
+        String sql = "SELECT payment_id, amount, payment_date, notes "
+                   + "FROM account_holder_payments WHERE holder_id = ? "
+                   + "ORDER BY payment_date DESC";
+        List<Object[]> rows = new ArrayList<>();
+        try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {
+            ps.setInt(1, holderId);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                rows.add(new Object[]{
+                    rs.getInt("payment_id"),
+                    rs.getBigDecimal("amount"),
+                    rs.getTimestamp("payment_date").toLocalDateTime()
+                        .toLocalDate().toString(),
+                    rs.getString("notes") != null ? rs.getString("notes") : ""
+                });
+            }
+        }
+        return rows;
+    }
+
     // ---------------------------------------------------------------
     // CA-33: Set credit limit
     // ---------------------------------------------------------------
