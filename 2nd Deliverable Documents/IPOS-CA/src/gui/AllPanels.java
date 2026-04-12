@@ -478,10 +478,17 @@ class StatementsPanel extends JPanel {
                     model.setRowCount(0);
                     for (Object[] row : get()) {
                         model.addRow(new Object[]{
-                            row[1], row[2], String.format("%.2f", row[5]),
-                            row[3], row[4]
+                            row[0],  // hidden col 0 — reminder_id
+                            row[2],  // col 1 — holder name
+                            String.format("%.2f", row[5]), // col 2 — amount owed
+                            row[3],  // col 3 — reminder type
+                            row[4]   // col 4 — payment due by
                         });
                     }
+                    // Hide the reminder_id column — used internally only
+                    table.getColumnModel().getColumn(0).setMinWidth(0);
+                    table.getColumnModel().getColumn(0).setMaxWidth(0);
+                    table.getColumnModel().getColumn(0).setWidth(0);
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(StatementsPanel.this, "DB error: " + ex.getMessage());
                 }
@@ -491,15 +498,24 @@ class StatementsPanel extends JPanel {
     }
 
     private void markReminderSent(int row) {
-        // The model row maps to the reminder; reload to get reminder IDs
+        int reminderId = (int) model.getValueAt(row, 0);
+        String holderName = (String) model.getValueAt(row, 1);
+
         int confirm = JOptionPane.showConfirmDialog(this,
-            "Mark this reminder as sent for " + model.getValueAt(row, 1) + "?",
+            "Mark reminder as sent for " + holderName + "?\n"
+            + "This confirms the reminder letter has been printed or posted.",
             "Mark Sent", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
-        JOptionPane.showMessageDialog(this,
-            "Reminder marked as sent.\n(Full implementation: reminderDAO.markAsSent(reminderId))",
-            "Done", JOptionPane.INFORMATION_MESSAGE);
-        loadDueReminders();
+
+        try {
+            reminderDAO.markAsSent(reminderId);
+            loadDueReminders(); // refresh — row disappears since it's now sent
+            JOptionPane.showMessageDialog(this,
+                "Reminder marked as sent for " + holderName + ".",
+                "Done", JOptionPane.INFORMATION_MESSAGE);
+        } catch (java.sql.SQLException ex) {
+            JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage());
+        }
     }
 
     private JButton makeButton(String t, Color bg, Color fg) {
@@ -650,7 +666,7 @@ class UserManagementPanel extends JPanel {
         if (row < 0) return;
         int userId = (int) model.getValueAt(row, 0);
         String current = (String) model.getValueAt(row, 3);
-        String[] roles = {"ADMIN","PHARMACIST","MANAGER"};
+        String[] roles = {"ADMIN","MANAGER","ACCOUNTANT","CLERK"};
         String chosen = (String) JOptionPane.showInputDialog(this,
             "Select new role:", "Change Role", JOptionPane.PLAIN_MESSAGE,
             null, roles, current);
@@ -774,7 +790,7 @@ class UserManagementPanel extends JPanel {
             panel.add(fields[i]); panel.add(Box.createVerticalStrut(8));
         }
 
-        String[] roles = {"PHARMACIST","MANAGER","ADMIN"};
+        String[] roles = {"CLERK","ACCOUNTANT","MANAGER","ADMIN"};
         JComboBox<String> roleBox = new JComboBox<>(roles);
         roleBox.setFont(new Font("SansSerif", Font.PLAIN, 13));
         roleBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
