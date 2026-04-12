@@ -127,10 +127,10 @@ Use any of these test accounts:
 
 | Username | Password | Role |
 |---|---|---|
-| `admin` | `admin123` | Admin — full access |
-| `jfaith` | `pharma345` | Pharmacist |
-| `apetite` | `manager123` | Manager |
-| `bsmith` | `pharma123` | Pharmacist |
+| `sydba` | `masterkey` | Admin — full access |
+| `manager` | `Get_it_done` | Manager |
+| `accountant` | `Count_money` | Manager |
+| `clerk` | `Paperwork` | Pharmacist |
 
 ---
 
