@@ -403,6 +403,7 @@ class StatementsPanel extends JPanel {
 
     private DefaultTableModel model;
     private JTable            table;
+    private JCheckBox         showAllCheckbox;
 
     public StatementsPanel() {
         setLayout(new BorderLayout(0, 12));
@@ -429,7 +430,7 @@ class StatementsPanel extends JPanel {
     private JPanel buildTable() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(COL_BG);
-        String[] cols = {"ID","Name","Amount Owed (£)","Reminder Type","Payment Due By"};
+        String[] cols = {"ID","Name","Amount Owed (£)","Type","Payment Due By","Sent"};
         model = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -440,6 +441,19 @@ class StatementsPanel extends JPanel {
         table.setFillsViewportHeight(true);
         table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         table.getTableHeader().setBackground(new Color(0xF1F5F9));
+
+        // Colour the Sent column
+        table.getColumnModel().getColumn(5).setCellRenderer(
+            new DefaultTableCellRenderer() {
+                @Override public Component getTableCellRendererComponent(JTable t, Object v,
+                        boolean sel, boolean foc, int r, int c) {
+                    JLabel l = (JLabel) super.getTableCellRendererComponent(t,v,sel,foc,r,c);
+                    l.setFont(new Font("SansSerif", Font.BOLD, 12));
+                    if (!sel) l.setForeground("YES".equals(v)
+                        ? new Color(0x22C55E) : new Color(0xF59E0B));
+                    return l;
+                }
+            });
 
         table.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
@@ -457,20 +471,31 @@ class StatementsPanel extends JPanel {
     private JPanel buildActionBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         bar.setBackground(COL_BG);
+
         JButton refresh = makeButton("↺ Refresh", new Color(0xE8F5EE), COL_PRI);
         refresh.setBorder(new CompoundBorder(new LineBorder(COL_BORDER,1,true), new EmptyBorder(7,14,7,14)));
         refresh.addActionListener(e -> loadDueReminders());
-        bar.add(refresh);
-        JLabel hint = new JLabel("   Double-click a row to mark reminder as sent.");
+
+        showAllCheckbox = new JCheckBox("Show all reminders (including sent)");
+        showAllCheckbox.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        showAllCheckbox.setBackground(COL_BG);
+        showAllCheckbox.addActionListener(e -> loadDueReminders());
+
+        JLabel hint = new JLabel("   Double-click an unsent row to mark as sent.");
         hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
         hint.setForeground(new Color(0x999999));
+
+        bar.add(refresh);
+        bar.add(showAllCheckbox);
         bar.add(hint);
         return bar;
     }
 
     private void loadDueReminders() {
+        boolean showAll = showAllCheckbox != null && showAllCheckbox.isSelected();
         SwingWorker<List<Object[]>, Void> w = new SwingWorker<List<Object[]>, Void>() {
             @Override protected List<Object[]> doInBackground() throws Exception {
+                if (showAll) return reminderDAO.getAllReminders();
                 return reminderDAO.getUnsentReminders();
             }
             @Override protected void done() {
@@ -482,10 +507,11 @@ class StatementsPanel extends JPanel {
                             row[2],  // col 1 — holder name
                             String.format("%.2f", row[5]), // col 2 — amount owed
                             row[3],  // col 3 — reminder type
-                            row[4]   // col 4 — payment due by
+                            row[4],  // col 4 — payment due by
+                            (row.length > 6 && Boolean.TRUE.equals(row[6])) ? "YES" : "NO"
                         });
                     }
-                    // Hide the reminder_id column — used internally only
+                    // Hide the reminder_id column
                     table.getColumnModel().getColumn(0).setMinWidth(0);
                     table.getColumnModel().getColumn(0).setMaxWidth(0);
                     table.getColumnModel().getColumn(0).setWidth(0);

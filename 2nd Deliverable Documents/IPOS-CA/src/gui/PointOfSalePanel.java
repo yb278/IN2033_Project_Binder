@@ -698,26 +698,58 @@ public class PointOfSalePanel extends JPanel {
     }
 
     private String buildReceiptText(Sale sale) {
+        // Try to load the RECEIPT template from the DB
+        String template = null;
+        try {
+            dao.TemplateDAO templateDAO = new dao.TemplateDAO();
+            template = templateDAO.getTemplate("RECEIPT");
+        } catch (Exception ignored) {}
+
+        // If template loaded, substitute placeholders
+        if (template != null && !template.isEmpty()) {
+            StringBuilder itemsTable = new StringBuilder();
+            for (SaleItem si : sale.getItems()) {
+                itemsTable.append(String.format("%-22s %3d x £%.2f = £%.2f%n",
+                    si.getDescription(), si.getQuantity(),
+                    si.getUnitPrice(), si.getLineTotal()));
+            }
+            String customerName = sale.getHolderId() > 0
+                ? "Account Holder #" + sale.getHolderId()
+                : (sale.getOccasionalName() != null ? sale.getOccasionalName() : "Walk-in Customer");
+
+            return template
+                .replace("{INVOICE_NO}",    sale.getInvoiceNumber() != null ? sale.getInvoiceNumber() : "—")
+                .replace("{DATE}",          sale.getSaleTimestamp() != null
+                    ? sale.getSaleTimestamp().toLocalDateTime().toLocalDate().toString() : "—")
+                .replace("{CUSTOMER_NAME}", customerName)
+                .replace("{ACCOUNT_NO}",    sale.getHolderId() > 0 ? "ACC" + String.format("%04d", sale.getHolderId()) : "N/A")
+                .replace("{ITEMS_TABLE}",   itemsTable.toString().trim())
+                .replace("{SUBTOTAL}",      String.format("%.2f", sale.getSubtotal()))
+                .replace("{VAT_RATE}",      "0.00")
+                .replace("{VAT_AMOUNT}",    String.format("%.2f", sale.getVatAmount()))
+                .replace("{TOTAL}",         String.format("%.2f", sale.getTotalAmount()))
+                .replace("{PHARMACIST_NAME}", "Cosymed Pharmacy")
+                .replace("\\n", "\n");
+        }
+
+        // Fallback if template not found
         StringBuilder sb = new StringBuilder();
         sb.append("COSYMED LTD.\n");
-        sb.append("3 High Level Drive, Sydenham SE26 3ET\n");
-        sb.append("Tel: 0208 778 0124\n");
         sb.append("Invoice No: ").append(sale.getInvoiceNumber()).append("\n");
-        sb.append("----------------------------------------\n\n");
-        sb.append("ITEMS:\n");
+        sb.append("----------------------------------------\n\nITEMS:\n");
         for (SaleItem si : sale.getItems()) {
             sb.append(String.format("%-22s %3d x £%.2f = £%.2f%n",
                 si.getDescription(), si.getQuantity(),
                 si.getUnitPrice(), si.getLineTotal()));
         }
         sb.append("\n----------------------------------------\n");
-        sb.append(String.format("Subtotal:    £%.2f%n", sale.getSubtotal()));
-        sb.append(String.format("VAT:         £%.2f%n", sale.getVatAmount()));
-        sb.append(String.format("Discount:    £%.2f%n", sale.getDiscountAmount()));
-        sb.append(String.format("TOTAL:       £%.2f%n", sale.getTotalAmount()));
-        sb.append("Payment:     ").append(sale.getPaymentMethod()).append("\n");
+        sb.append(String.format("Subtotal:  £%.2f%n", sale.getSubtotal()));
+        sb.append(String.format("VAT:       £%.2f%n", sale.getVatAmount()));
+        sb.append(String.format("Discount:  £%.2f%n", sale.getDiscountAmount()));
+        sb.append(String.format("TOTAL:     £%.2f%n", sale.getTotalAmount()));
+        sb.append("Payment:   ").append(sale.getPaymentMethod()).append("\n");
         if (sale.getChangeGiven() != null)
-            sb.append(String.format("Change:      £%.2f%n", sale.getChangeGiven()));
+            sb.append(String.format("Change:    £%.2f%n", sale.getChangeGiven()));
         sb.append("\nThank you for your custom!\n");
         return sb.toString();
     }

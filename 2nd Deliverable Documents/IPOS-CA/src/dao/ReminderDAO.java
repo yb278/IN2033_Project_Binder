@@ -134,4 +134,35 @@ public class ReminderDAO {
         }
         return results;
     }
+
+    /**
+     * Returns all reminders including sent ones — used by Statements panel
+     * "Show all" toggle to display reminder history.
+     * Each row: [reminderId, holderId, holderName, reminderType,
+     *            paymentDueBy, amountOwed, sent]
+     */
+    public List<Object[]> getAllReminders() throws SQLException {
+        String sql = "SELECT r.reminder_id, r.holder_id, "
+                   + "CONCAT(ah.first_name, ' ', ah.last_name) as holder_name, "
+                   + "r.reminder_type, r.payment_due_by, r.amount_owed, r.sent "
+                   + "FROM reminders r "
+                   + "JOIN account_holders ah ON r.holder_id = ah.holder_id "
+                   + "ORDER BY r.generated_at DESC";
+        List<Object[]> results = new ArrayList<>();
+        try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                results.add(new Object[]{
+                    rs.getInt("reminder_id"),
+                    rs.getInt("holder_id"),
+                    rs.getString("holder_name"),
+                    rs.getString("reminder_type"),
+                    rs.getDate("payment_due_by"),
+                    rs.getBigDecimal("amount_owed"),
+                    rs.getBoolean("sent")
+                });
+            }
+        }
+        return results;
+    }
 }
