@@ -1133,18 +1133,69 @@ class CreditDiscountsPanel extends JPanel {
         w.execute();
     }
 
+    private DefaultTableModel plansModel;
+    private JTable            plansTable;
+
     private JPanel buildDiscountPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 12));
         panel.setBackground(COL_WHITE);
         panel.setBorder(new CompoundBorder(
             new LineBorder(COL_BORDER,1,true), new EmptyBorder(16,16,16,16)));
+
         JLabel heading = new JLabel("Discount Plans (CA-34)");
         heading.setFont(new Font("Georgia", Font.BOLD, 14));
         panel.add(heading, BorderLayout.NORTH);
 
-        JPanel plansPanel = new JPanel(new GridLayout(0, 1, 0, 8));
-        plansPanel.setBackground(COL_WHITE);
+        // Table of plans
+        String[] cols = {"ID", "Plan Name", "Type", "Rate / Tiers"};
+        plansModel = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        plansTable = new JTable(plansModel);
+        plansTable.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        plansTable.setRowHeight(30); plansTable.setShowGrid(false);
+        plansTable.setBackground(COL_WHITE); plansTable.setFillsViewportHeight(true);
+        plansTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 11));
+        plansTable.getTableHeader().setBackground(new Color(0xF1F5F9));
+        // Hide ID column
+        plansTable.getColumnModel().getColumn(0).setMinWidth(0);
+        plansTable.getColumnModel().getColumn(0).setMaxWidth(0);
+        plansTable.getColumnModel().getColumn(0).setWidth(0);
 
+        JScrollPane scroll = new JScrollPane(plansTable);
+        scroll.setBorder(new LineBorder(COL_BORDER,1,true));
+        panel.add(scroll, BorderLayout.CENTER);
+
+        // Button bar
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        btnRow.setBackground(COL_WHITE);
+
+        JButton createBtn = makeDiscountBtn("+ New Plan");
+        JButton editBtn   = makeDiscountBtn("Edit Plan");
+        JButton deleteBtn = makeDiscountBtn("Delete Plan");
+
+        createBtn.addActionListener(e -> openCreatePlanDialog());
+        editBtn.addActionListener(e -> openEditPlanDialog());
+        deleteBtn.addActionListener(e -> deleteSelectedPlan());
+
+        btnRow.add(createBtn); btnRow.add(editBtn); btnRow.add(deleteBtn);
+        panel.add(btnRow, BorderLayout.SOUTH);
+
+        loadPlans();
+        return panel;
+    }
+
+    private JButton makeDiscountBtn(String text) {
+        JButton b = new JButton(text);
+        b.setFont(new Font("SansSerif", Font.BOLD, 12));
+        b.setBackground(new Color(0xE8F5EE)); b.setForeground(COL_PRI);
+        b.setBorder(new CompoundBorder(new LineBorder(COL_BORDER,1,true), new EmptyBorder(5,10,5,10)));
+        b.setFocusPainted(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+
+    private void loadPlans() {
         SwingWorker<java.util.List<Object[]>, Void> w =
             new SwingWorker<java.util.List<Object[]>, Void>() {
                 @Override protected java.util.List<Object[]> doInBackground() throws Exception {
@@ -1152,37 +1203,181 @@ class CreditDiscountsPanel extends JPanel {
                 }
                 @Override protected void done() {
                     try {
+                        plansModel.setRowCount(0);
                         for (Object[] p : get()) {
-                            JPanel card = new JPanel(new BorderLayout());
-                            card.setBackground(new Color(0xF8FAFC));
-                            card.setBorder(new CompoundBorder(
-                                new LineBorder(COL_BORDER,1,true), new EmptyBorder(10,14,10,14)));
-                            JLabel name = new JLabel((String) p[1]);
-                            name.setFont(new Font("SansSerif", Font.BOLD, 13));
-                            JLabel detail = new JLabel(p[2] + " — " + p[3]);
-                            detail.setFont(new Font("SansSerif", Font.PLAIN, 11));
-                            detail.setForeground(new Color(0x6B7C72));
-                            JPanel text = new JPanel(new GridLayout(2, 1));
-                            text.setBackground(new Color(0xF8FAFC));
-                            text.add(name); text.add(detail);
-                            card.add(text, BorderLayout.CENTER);
-                            plansPanel.add(card);
+                            String type = (String) p[2];
+                            String rateDisplay;
+                            if ("FIXED".equals(type)) {
+                                rateDisplay = p[3] + "%";
+                            } else {
+                                // Parse tiers JSON into readable text e.g. "<£100: 0%  £100-£300: 1%  £300+: 2%"
+                                String tiers = p[4] != null ? p[4].toString() : "";
+                                rateDisplay = parseTiersForDisplay(tiers);
+                            }
+                            plansModel.addRow(new Object[]{ p[0], p[1], type, rateDisplay });
                         }
-                        plansPanel.revalidate(); plansPanel.repaint();
                     } catch (Exception ex) { /* silent */ }
                 }
             };
         w.execute();
+    }
 
-        JScrollPane scroll = new JScrollPane(plansPanel);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        panel.add(scroll, BorderLayout.CENTER);
+    /** Converts JSON tiers string into a human-readable rate summary */
+    private String parseTiersForDisplay(String tiersJson) {
+        if (tiersJson == null || tiersJson.isEmpty()) return "—";
+        try {
+            StringBuilder sb = new StringBuilder();
+            String[] tiers = tiersJson.replace("[","").replace("]","").split("},\\s*\\{");
+            for (int i = 0; i < tiers.length; i++) {
+                String tier = tiers[i].replace("{","").replace("}","");
+                double min  = extractDouble(tier, "min");
+                double max  = extractDouble(tier, "max");
+                double rate = extractDouble(tier, "rate");
+                if (i > 0) sb.append("  |  ");
+                if (max >= 999999) {
+                    sb.append("£").append((int) min).append("+: ").append((int) rate).append("%");
+                } else {
+                    sb.append("£").append((int) min).append("–£").append((int) max)
+                      .append(": ").append((int) rate).append("%");
+                }
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return tiersJson;
+        }
+    }
 
-        JLabel hint = new JLabel("Assign plans in the Account Holders panel.");
-        hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
-        hint.setForeground(new Color(0x6B7C72));
-        panel.add(hint, BorderLayout.SOUTH);
-        return panel;
+    private double extractDouble(String json, String key) {
+        try {
+            int idx = json.indexOf("\"" + key + "\":");
+            if (idx < 0) return 0;
+            String sub = json.substring(idx + key.length() + 3).trim();
+            int end = sub.indexOf(',');
+            if (end < 0) end = sub.indexOf('}');
+            if (end < 0) end = sub.length();
+            return Double.parseDouble(sub.substring(0, end).trim());
+        } catch (Exception e) { return 0; }
+    }
+
+    private void openCreatePlanDialog() {
+        JTextField nameField = new JTextField(20);
+        JComboBox<String> typeBox = new JComboBox<>(new String[]{"FIXED", "FLEXIBLE"});
+        JTextField rateField = new JTextField("0.00", 10);
+        JTextField tiersField = new JTextField(
+            "[{\"min\":0,\"max\":100,\"rate\":0},{\"min\":100,\"max\":300,\"rate\":1},{\"min\":300,\"max\":999999,\"rate\":2}]", 30);
+
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
+        form.add(new JLabel("Plan Name:")); form.add(nameField);
+        form.add(new JLabel("Type:"));     form.add(typeBox);
+        form.add(new JLabel("Fixed Rate (%) — FIXED only:")); form.add(rateField);
+        form.add(new JLabel("Tiers JSON — FLEXIBLE only:"));  form.add(tiersField);
+
+        int result = JOptionPane.showConfirmDialog(this, form,
+            "Create New Discount Plan", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String name = nameField.getText().trim();
+        String type = (String) typeBox.getSelectedItem();
+        if (name.isEmpty()) { JOptionPane.showMessageDialog(this, "Plan name required."); return; }
+
+        try {
+            String insertSql = "INSERT INTO discount_plans (plan_name, plan_type, fixed_rate, flexible_tiers) VALUES (?,?,?,?)";
+            try (java.sql.PreparedStatement ps = database.DatabaseConnection.getConnection()
+                    .prepareStatement(insertSql)) {
+                ps.setString(1, name);
+                ps.setString(2, type);
+                if ("FIXED".equals(type)) {
+                    ps.setBigDecimal(3, new java.math.BigDecimal(rateField.getText().trim()));
+                    ps.setNull(4, java.sql.Types.VARCHAR);
+                } else {
+                    ps.setNull(3, java.sql.Types.DECIMAL);
+                    ps.setString(4, tiersField.getText().trim());
+                }
+                ps.executeUpdate();
+            }
+            loadPlans();
+            JOptionPane.showMessageDialog(this, "Plan '" + name + "' created.");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        }
+    }
+
+    private void openEditPlanDialog() {
+        int row = plansTable.getSelectedRow();
+        if (row < 0) { JOptionPane.showMessageDialog(this, "Select a plan first."); return; }
+        int planId   = (int)    plansModel.getValueAt(row, 0);
+        String name  = (String) plansModel.getValueAt(row, 1);
+        String type  = (String) plansModel.getValueAt(row, 2);
+
+        JTextField nameField = new JTextField(name, 20);
+        JTextField rateField = new JTextField(20);
+
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
+        form.add(new JLabel("Plan Name:")); form.add(nameField);
+        if ("FIXED".equals(type)) {
+            form.add(new JLabel("Fixed Rate (%):")); form.add(rateField);
+        } else {
+            rateField.setText("See tiers — edit directly in DB for now");
+        }
+
+        int result = JOptionPane.showConfirmDialog(this, form,
+            "Edit Plan: " + name, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        try {
+            if ("FIXED".equals(type)) {
+                String sql = "UPDATE discount_plans SET plan_name=?, fixed_rate=? WHERE plan_id=?";
+                try (java.sql.PreparedStatement ps = database.DatabaseConnection.getConnection()
+                        .prepareStatement(sql)) {
+                    ps.setString(1, nameField.getText().trim());
+                    ps.setBigDecimal(2, new java.math.BigDecimal(rateField.getText().trim()));
+                    ps.setInt(3, planId);
+                    ps.executeUpdate();
+                }
+            } else {
+                String sql = "UPDATE discount_plans SET plan_name=? WHERE plan_id=?";
+                try (java.sql.PreparedStatement ps = database.DatabaseConnection.getConnection()
+                        .prepareStatement(sql)) {
+                    ps.setString(1, nameField.getText().trim());
+                    ps.setInt(2, planId);
+                    ps.executeUpdate();
+                }
+            }
+            loadPlans();
+            JOptionPane.showMessageDialog(this, "Plan updated.");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        }
+    }
+
+    private void deleteSelectedPlan() {
+        int row = plansTable.getSelectedRow();
+        if (row < 0) { JOptionPane.showMessageDialog(this, "Select a plan first."); return; }
+        int planId  = (int)    plansModel.getValueAt(row, 0);
+        String name = (String) plansModel.getValueAt(row, 1);
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Delete plan '" + name + "'?\n"
+            + "Any account holders on this plan will have their plan set to null.",
+            "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        try {
+            // Unassign from holders first
+            try (java.sql.PreparedStatement ps = database.DatabaseConnection.getConnection()
+                    .prepareStatement("UPDATE account_holders SET discount_plan_id=NULL WHERE discount_plan_id=?")) {
+                ps.setInt(1, planId); ps.executeUpdate();
+            }
+            // Delete the plan
+            try (java.sql.PreparedStatement ps = database.DatabaseConnection.getConnection()
+                    .prepareStatement("DELETE FROM discount_plans WHERE plan_id=?")) {
+                ps.setInt(1, planId); ps.executeUpdate();
+            }
+            loadPlans();
+            JOptionPane.showMessageDialog(this, "Plan '" + name + "' deleted.");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        }
     }
 }
 

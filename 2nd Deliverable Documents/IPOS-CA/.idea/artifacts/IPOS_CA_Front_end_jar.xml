@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="IPOS-CA-Front-end:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/IPOS_CA_Front_end_jar</output-path>
+    <root id="archive" name="IPOS-CA-Front-end.jar">
+      <element id="module-output" name="IPOS-CA-Front-end" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/mysql-connector-j-9.5.0/mysql-connector-j-9.5.0.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

@@ -34,15 +34,12 @@ public class DiscountPlanDAO {
         try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                String type = rs.getString("plan_type");
-                String detail = "FIXED".equals(type)
-                    ? rs.getBigDecimal("fixed_rate") + "% flat rate"
-                    : "Flexible tiers (by monthly spend)";
                 plans.add(new Object[]{
                     rs.getInt("plan_id"),
                     rs.getString("plan_name"),
-                    type,
-                    detail
+                    rs.getString("plan_type"),
+                    rs.getBigDecimal("fixed_rate"),   // index 3 — null for FLEXIBLE
+                    rs.getString("flexible_tiers")    // index 4 — null for FIXED
                 });
             }
         }
@@ -84,7 +81,11 @@ public class DiscountPlanDAO {
     public String[] getPlanNamesArray() throws SQLException {
         List<String> names = new ArrayList<>();
         for (Object[] row : getAllPlans()) {
-            names.add(row[0] + " — " + row[1]);
+            String type = (String) row[2];
+            String detail = "FIXED".equals(type)
+                ? row[3] + "% flat"
+                : "Variable volume";
+            names.add(row[1] + " — " + detail);
         }
         return names.toArray(new String[0]);
     }
