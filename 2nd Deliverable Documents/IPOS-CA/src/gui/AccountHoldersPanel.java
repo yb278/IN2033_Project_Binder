@@ -148,7 +148,7 @@ public class AccountHoldersPanel extends JPanel {
         holdersTable.setRowHeight(34);
         holdersTable.setShowGrid(false);
         holdersTable.setIntercellSpacing(new Dimension(0, 0));
-        holdersTable.setSelectionBackground(new Color(0xE8F5EE));
+        holdersTable.setSelectionBackground(new Color(0x4F9E6F)); holdersTable.setSelectionForeground(Color.WHITE);
         holdersTable.setBackground(COL_WHITE);
         holdersTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         holdersTable.getTableHeader().setBackground(new Color(0xF1F5F9));

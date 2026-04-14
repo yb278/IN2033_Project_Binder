@@ -237,6 +237,15 @@ public class StockDAO {
      * @throws SQLException if a database error occurs
      */
     public boolean removeStockItem(int stockItemId) throws SQLException {
+        // Check for existing sales records first
+        String checkSql = "SELECT COUNT(*) FROM sale_items WHERE stock_item_id = ?";
+        try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(checkSql)) {
+            ps.setInt(1, stockItemId);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next() && rs.getInt(1) > 0) {
+                throw new SQLException("HAS_SALES");
+            }
+        }
         String sql = "DELETE FROM stock_items WHERE stock_item_id = ?";
         try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {
             ps.setInt(1, stockItemId);

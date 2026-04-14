@@ -104,7 +104,7 @@ public class StockPanel extends JPanel {
         JButton addBtn = makeButton("+ Add Item", COL_PRI, Color.WHITE);
         addBtn.addActionListener(e -> openAddItemDialog());
 
-        JButton qtyBtn = makeButton("✏ Edit Qty", new Color(0xE8F5EE), new Color(0x3B82F6));
+        JButton qtyBtn = makeButton("📦 Receive Delivery / Edit Qty", new Color(0xE8F5EE), new Color(0x3B82F6));
         qtyBtn.setBorder(new CompoundBorder(new LineBorder(new Color(0x3B82F6),1,true), new EmptyBorder(7,12,7,12)));
         qtyBtn.addActionListener(e -> openEditQuantityDialog());
 
@@ -139,7 +139,7 @@ public class StockPanel extends JPanel {
         stockTable.setShowGrid(false);
         stockTable.setIntercellSpacing(new Dimension(0,0));
         stockTable.setBackground(COL_WHITE);
-        stockTable.setSelectionBackground(new Color(0xE8F5EE));
+        stockTable.setSelectionBackground(new Color(0x4F9E6F)); stockTable.setSelectionForeground(Color.WHITE);
         stockTable.setFillsViewportHeight(true);
         stockTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         stockTable.getTableHeader().setBackground(new Color(0xF1F5F9));
@@ -380,10 +380,16 @@ public class StockPanel extends JPanel {
         }
         int row = stockTable.getSelectedRow();
         String desc = (String) tableModel.getValueAt(row, 2);
+        String qtyStr = tableModel.getValueAt(row, 3).toString();
+        int qty = 0;
+        try { qty = Integer.parseInt(qtyStr.toString().trim()); } catch (Exception ignored) {}
 
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Permanently remove \"" + desc + "\" from stock?\n" +
-            "This cannot be undone.",
+        String warning = "Permanently remove \"" + desc + "\" from stock?\nThis cannot be undone.";
+        if (qty > 0) {
+            warning += "\n\n⚠ This item still has " + qty + " units in stock.";
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this, warning,
             "Confirm Remove", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm != JOptionPane.YES_OPTION) return;
 
@@ -393,7 +399,20 @@ public class StockPanel extends JPanel {
             loadAllStock();
             JOptionPane.showMessageDialog(this, "\"" + desc + "\" removed from stock.",
                 "Removed", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException ex) { showDbError(ex); }
+        } catch (SQLException ex) {
+            if ("HAS_SALES".equals(ex.getMessage())
+                    || (ex.getMessage() != null && (ex.getMessage().contains("foreign key")
+                    || ex.getMessage().contains("constraint")
+                    || ex.getErrorCode() == 1451))) {
+                JOptionPane.showMessageDialog(this,
+                    "Cannot remove \"" + desc + "\" — it has existing sales records.\n\n"
+                    + "Stock items with sales history cannot be deleted to preserve\n"
+                    + "data integrity. Set the quantity to 0 to mark it as unavailable.",
+                    "Cannot Remove", JOptionPane.WARNING_MESSAGE);
+            } else {
+                showDbError(ex);
+            }
+        }
     }
 
     /** CA-21: Configure VAT rate */

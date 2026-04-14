@@ -157,7 +157,7 @@ public class LoginFrame extends JFrame {
         card.add(loginButton);
         card.add(Box.createVerticalStrut(20));
 
-        JLabel versionLabel = new JLabel("IN2033 Team Project 2025–26 · Team B");
+        JLabel versionLabel = new JLabel("IN2033 Team Project 2026 · Team B");
         versionLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
         versionLabel.setForeground(new Color(0xBBBBBB));
         versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);

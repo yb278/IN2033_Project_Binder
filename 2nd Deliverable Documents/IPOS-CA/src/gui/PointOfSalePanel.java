@@ -192,7 +192,7 @@ public class PointOfSalePanel extends JPanel {
         basketTable.setShowGrid(false);
         basketTable.setIntercellSpacing(new Dimension(0,0));
         basketTable.setBackground(COL_WHITE);
-        basketTable.setSelectionBackground(new Color(0xE8F5EE));
+        basketTable.setSelectionBackground(new Color(0x4F9E6F)); basketTable.setSelectionForeground(Color.WHITE);
         basketTable.setFillsViewportHeight(true);
         basketTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         basketTable.getTableHeader().setBackground(new Color(0xF1F5F9));

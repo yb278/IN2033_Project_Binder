@@ -196,7 +196,7 @@ public class MainFrame extends JFrame {
         sidebar.add(Box.createVerticalGlue());
 
         // Bottom — version info
-        JLabel versionLabel = new JLabel("IN2033 · Team B · 2025-26");
+        JLabel versionLabel = new JLabel("IN2033 · Team B · 2026");
         versionLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
         versionLabel.setForeground(COL_SIDEBAR_SUB);
         versionLabel.setBorder(new EmptyBorder(12, 20, 16, 20));

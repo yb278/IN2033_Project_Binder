@@ -372,7 +372,7 @@ class OrdersPanel extends JPanel {
     private void styleTable(JTable t) {
         t.setFont(new Font("SansSerif", Font.PLAIN, 13)); t.setRowHeight(34);
         t.setShowGrid(false); t.setIntercellSpacing(new Dimension(0,0));
-        t.setBackground(COL_WHITE); t.setSelectionBackground(new Color(0xE8F5EE));
+        t.setBackground(COL_WHITE); t.setSelectionBackground(new Color(0x4F9E6F)); t.setSelectionForeground(Color.WHITE);
         t.setFillsViewportHeight(true);
         t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         t.getTableHeader().setBackground(new Color(0xF1F5F9));
@@ -437,7 +437,7 @@ class StatementsPanel extends JPanel {
         table = new JTable(model);
         table.setFont(new Font("SansSerif", Font.PLAIN, 13));
         table.setRowHeight(34); table.setShowGrid(false);
-        table.setBackground(COL_WHITE); table.setSelectionBackground(new Color(0xE8F5EE));
+        table.setBackground(COL_WHITE); table.setSelectionBackground(new Color(0x4F9E6F)); table.setSelectionForeground(Color.WHITE);
         table.setFillsViewportHeight(true);
         table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         table.getTableHeader().setBackground(new Color(0xF1F5F9));
@@ -476,6 +476,10 @@ class StatementsPanel extends JPanel {
         refresh.setBorder(new CompoundBorder(new LineBorder(COL_BORDER,1,true), new EmptyBorder(7,14,7,14)));
         refresh.addActionListener(e -> loadDueReminders());
 
+        JButton previewBtn = makeButton("Preview Letter", new Color(0xE8F5EE), COL_PRI);
+        previewBtn.setBorder(new CompoundBorder(new LineBorder(COL_BORDER,1,true), new EmptyBorder(7,14,7,14)));
+        previewBtn.addActionListener(e -> previewSelectedReminder());
+
         showAllCheckbox = new JCheckBox("Show all reminders (including sent)");
         showAllCheckbox.setFont(new Font("SansSerif", Font.PLAIN, 12));
         showAllCheckbox.setBackground(COL_BG);
@@ -486,9 +490,53 @@ class StatementsPanel extends JPanel {
         hint.setForeground(new Color(0x999999));
 
         bar.add(refresh);
+        bar.add(previewBtn);
         bar.add(showAllCheckbox);
         bar.add(hint);
         return bar;
+    }
+
+    private void previewSelectedReminder() {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Select a reminder row first.");
+            return;
+        }
+        String holderName = (String) model.getValueAt(row, 1);
+        String amount     = (String) model.getValueAt(row, 2);
+        String type       = (String) model.getValueAt(row, 3);
+        String paymentDue = model.getValueAt(row, 4).toString();
+
+        String templateType = "FIRST".equals(type) ? "FIRST_REMINDER" : "SECOND_REMINDER";
+
+        try {
+            dao.TemplateDAO templateDAO = new dao.TemplateDAO();
+            String letter = templateDAO.fillTemplate(
+                templateType,
+                holderName,
+                "See account statement",
+                "ACC-" + holderName.replaceAll("\\s+", "").substring(0, 4).toUpperCase(),
+                "£" + amount,
+                java.time.LocalDate.now().toString(),
+                paymentDue,
+                "Cosymed Pharmacy"
+            );
+
+            JTextArea area = new JTextArea(letter);
+            area.setFont(new Font("Monospaced", Font.PLAIN, 12));
+            area.setEditable(false);
+            area.setLineWrap(true);
+            area.setWrapStyleWord(true);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(520, 380));
+
+            JOptionPane.showMessageDialog(this, scroll,
+                type + " Reminder Letter — " + holderName,
+                JOptionPane.PLAIN_MESSAGE);
+
+        } catch (java.sql.SQLException ex) {
+            JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage());
+        }
     }
 
     private void loadDueReminders() {
@@ -600,7 +648,7 @@ class UserManagementPanel extends JPanel {
         table = new JTable(model);
         table.setFont(new Font("SansSerif", Font.PLAIN, 13));
         table.setRowHeight(34); table.setShowGrid(false);
-        table.setBackground(COL_WHITE); table.setSelectionBackground(new Color(0xE8F5EE));
+        table.setBackground(COL_WHITE); table.setSelectionBackground(new Color(0x4F9E6F)); table.setSelectionForeground(Color.WHITE);
         table.setFillsViewportHeight(true);
         table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         table.getTableHeader().setBackground(new Color(0xF1F5F9));
@@ -692,7 +740,7 @@ class UserManagementPanel extends JPanel {
         if (row < 0) return;
         int userId = (int) model.getValueAt(row, 0);
         String current = (String) model.getValueAt(row, 3);
-        String[] roles = {"ADMIN","MANAGER","ACCOUNTANT","CLERK"};
+        String[] roles = {"ADMIN","PHARMACIST","MANAGER"};
         String chosen = (String) JOptionPane.showInputDialog(this,
             "Select new role:", "Change Role", JOptionPane.PLAIN_MESSAGE,
             null, roles, current);
@@ -816,7 +864,7 @@ class UserManagementPanel extends JPanel {
             panel.add(fields[i]); panel.add(Box.createVerticalStrut(8));
         }
 
-        String[] roles = {"CLERK","ACCOUNTANT","MANAGER","ADMIN"};
+        String[] roles = {"PHARMACIST","MANAGER","ADMIN"};
         JComboBox<String> roleBox = new JComboBox<>(roles);
         roleBox.setFont(new Font("SansSerif", Font.PLAIN, 13));
         roleBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
@@ -1855,7 +1903,7 @@ class OnlineSalesPanel extends JPanel {
 
         panel.add(new JScrollPane(cardPaymentsTable), BorderLayout.CENTER);
 
-        JLabel hint = new JLabel("Card details from all CARD sales are listed here. Share with IPOS-PU so they can clear the payment, then mark as reconciled.");
+        JLabel hint = new JLabel("Card details from all CARD sales are listed here. Shared with IPOS-PU so they can clear the payment, then mark as reconciled.");
         hint.setFont(new Font("SansSerif", Font.ITALIC, 11));
         hint.setForeground(COL_SUB);
         panel.add(hint, BorderLayout.SOUTH);
@@ -1872,7 +1920,7 @@ class OnlineSalesPanel extends JPanel {
                 try {
                     boolean ok = get();
                     statusLabel.setText(ok ? "✓ Connected to IPOS-PU" :
-                        "⚠ IPOS-PU not reachable — update schema name in CrossSystemService.java");
+                        "⚠ IPOS-PU not reachable");
                     statusLabel.setForeground(ok ? new Color(0x22C55E) : new Color(0xF59E0B));
                 } catch (Exception ignored) {}
                 loadOnlineSales();
@@ -2056,7 +2104,7 @@ class OnlineSalesPanel extends JPanel {
         JTable t = new JTable(m);
         t.setFont(new Font("SansSerif", Font.PLAIN, 13));
         t.setRowHeight(32); t.setShowGrid(false);
-        t.setBackground(COL_WHITE); t.setSelectionBackground(new Color(0xE8F5EE));
+        t.setBackground(COL_WHITE); t.setSelectionBackground(new Color(0x4F9E6F)); t.setSelectionForeground(Color.WHITE);
         t.setFillsViewportHeight(true);
         t.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         t.getTableHeader().setBackground(new Color(0xF1F5F9));

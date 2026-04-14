@@ -85,7 +85,9 @@ public class DiscountPlanDAO {
             String detail = "FIXED".equals(type)
                 ? row[3] + "% flat"
                 : "Variable volume";
-            names.add(row[1] + " — " + detail);
+            // Format: "1 — No Discount — 0.0% flat"
+            // The plan ID prefix is parsed back in openApplyDiscountDialog
+            names.add(row[0] + " — " + row[1] + " — " + detail);
         }
         return names.toArray(new String[0]);
     }
