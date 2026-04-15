@@ -103,7 +103,7 @@ public class ReportDAO {
      * @throws SQLException if a database error occurs
      */
     public List<Object[]> getStockReport(double vatRate) throws SQLException {
-        String sql = "SELECT description, quantity_available, min_stock_level, "
+        String sql = "SELECT sa_item_id, description, quantity_available, min_stock_level, "
                    + "bulk_cost, markup_rate, "
                    + "ROUND(bulk_cost * (1 + markup_rate/100), 2) AS retail_ex_vat "
                    + "FROM stock_items ORDER BY stock_item_id";
@@ -113,14 +113,21 @@ public class ReportDAO {
             while (rs.next()) {
                 int qty    = rs.getInt("quantity_available");
                 int minLvl = rs.getInt("min_stock_level");
+                // Recommended min order: bring stock to 110% of min level
+                // per spec: "availability should become 10% above the stock limit"
+                int recommended = qty < minLvl
+                    ? (int) Math.ceil(minLvl * 1.1) - qty
+                    : 0;
                 rows.add(new Object[]{
+                    rs.getString("sa_item_id"),
                     rs.getString("description"),
                     qty,
                     minLvl,
+                    recommended > 0 ? recommended : "—",
                     "£" + rs.getBigDecimal("bulk_cost"),
                     rs.getBigDecimal("markup_rate") + "%",
                     "£" + rs.getBigDecimal("retail_ex_vat"),
-                    qty <= minLvl ? "⚠ LOW STOCK" : "OK"
+                    qty < minLvl ? "⚠ LOW STOCK" : "OK"
                 });
             }
         }

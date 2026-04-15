@@ -1034,7 +1034,7 @@ class ReportsPanel extends JPanel {
                     return reportDAO.getStockReport(vat.doubleValue());
                 }
                 @Override protected void done() {
-                    try { showTable(new String[]{"Description","Qty","Min Level","Bulk Cost","Markup","Retail Price","Status"}, get()); }
+                    try { showTable(new String[]{"Item ID","Description","Qty Available","Min Level","Rec. Min Order","Bulk Cost","Markup","Retail Price","Status"}, get()); }
                     catch (Exception ex) { showError(ex); }
                 }
             };
