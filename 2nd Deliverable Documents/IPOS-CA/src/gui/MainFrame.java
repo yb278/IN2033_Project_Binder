@@ -171,28 +171,32 @@ public class MainFrame extends JFrame {
             sidebar.add(Box.createVerticalStrut(4));
         }
 
+        // PHARMACIST handles operational tasks (sales, stock, orders, customers)
         if (role.equals("ADMIN") || role.equals("PHARMACIST")) {
             sidebar.add(makeSectionLabel("Operations"));
-            sidebar.add(makeNavButton("Point of Sale",    "PointOfSale",     role.equals("PHARMACIST")));
-            sidebar.add(makeNavButton("Account Holders",  "AccountHolders",  false));
-            sidebar.add(makeNavButton("Stock",            "Stock",           false));
-            sidebar.add(makeNavButton("Orders (SA)",      "Orders",          false));
-            sidebar.add(makeNavButton("Online Sales (PU)","OnlineSales",     false));
-            sidebar.add(makeNavButton("Statements",       "Statements",      false));
+            sidebar.add(makeNavButton("Point of Sale",       "PointOfSale",     role.equals("PHARMACIST")));
+            sidebar.add(makeNavButton("Account Holders",     "AccountHolders",  false));
+            sidebar.add(makeNavButton("Stock",               "Stock",           false));
+            sidebar.add(makeNavButton("Orders (SA)",         "Orders",          false));
+            sidebar.add(makeNavButton("Online Sales (PU)",   "OnlineSales",     false));
+            sidebar.add(makeNavButton("Monthly Statements",  "Statements",      false));
             sidebar.add(Box.createVerticalStrut(4));
         }
 
-        if (role.equals("MANAGER") || role.equals("ADMIN")) {
+        // MANAGER and ACCOUNTANT handle reporting/financial oversight
+        if (role.equals("MANAGER") || role.equals("ACCOUNTANT") || role.equals("ADMIN")) {
             sidebar.add(makeSectionLabel("Management"));
-            sidebar.add(makeNavButton("Reports",          "Reports",         role.equals("MANAGER")));
-            sidebar.add(makeNavButton("Credit & Discounts","CreditDiscounts",false));
-            sidebar.add(makeNavButton("Templates",        "Templates",       false));
-            sidebar.add(makeNavButton("Settings",         "Settings",        false));
+            sidebar.add(makeNavButton("Reports",             "Reports",         role.equals("MANAGER")));
+            sidebar.add(makeNavButton("Account Holders",     "AccountHolders",  false));
+            sidebar.add(makeNavButton("Monthly Statements",  "Statements",      false));
+            sidebar.add(makeNavButton("Credit & Discounts",  "CreditDiscounts", false));
+            sidebar.add(makeNavButton("Templates",           "Templates",       false));
+            sidebar.add(makeNavButton("Settings",            "Settings",        false));
         }
 
         sidebar.add(Box.createVerticalGlue());
 
-        JLabel versionLabel = new JLabel("IN2033 · Team B · 2026");
+        JLabel versionLabel = new JLabel("IN2033 · Team B · 2025-26");
         versionLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
         versionLabel.setForeground(new Color(0x6B7C72));
         versionLabel.setBorder(new EmptyBorder(10, 14, 14, 14));

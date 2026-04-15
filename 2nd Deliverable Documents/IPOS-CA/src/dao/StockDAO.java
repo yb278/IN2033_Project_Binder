@@ -181,7 +181,7 @@ public class StockDAO {
      * @throws SQLException if a database error occurs
      */
     public List<StockItem> getLowStockItems() throws SQLException {
-        String sql = "SELECT * FROM stock_items WHERE quantity_available <= min_stock_level "
+        String sql = "SELECT * FROM stock_items WHERE quantity_available < min_stock_level "
                    + "ORDER BY stock_item_id";
         List<StockItem> items = new ArrayList<>();
         try (PreparedStatement ps = DatabaseConnection.getConnection().prepareStatement(sql)) {

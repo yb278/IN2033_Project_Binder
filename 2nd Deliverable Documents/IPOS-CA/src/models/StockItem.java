@@ -90,7 +90,7 @@ public class StockItem {
      * Used by CA-20 (Check If Stock Low) to flag items needing reordering.
      */
     public boolean isLowStock() {
-        return quantityAvailable <= minStockLevel;
+        return quantityAvailable < minStockLevel;
     }
 
     /**
