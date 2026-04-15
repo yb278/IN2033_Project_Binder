@@ -627,6 +627,24 @@ public class PointOfSalePanel extends JPanel {
             }
         }
 
+        // Validate credit limit for ACCOUNT payments
+        if ("ACCOUNT".equals(method) && selectedHolder != null) {
+            BigDecimal currentTotal = new BigDecimal(totalLabel.getText().replace("£",""));
+            BigDecimal newBalance = selectedHolder.getOutstandingBalance().add(currentTotal);
+            if (newBalance.compareTo(selectedHolder.getCreditLimit()) > 0) {
+                JOptionPane.showMessageDialog(this,
+                    "Cannot complete sale — credit limit exceeded.\n\n"
+                    + "Current balance:  £" + String.format("%.2f", selectedHolder.getOutstandingBalance()) + "\n"
+                    + "This purchase:    £" + String.format("%.2f", currentTotal) + "\n"
+                    + "New balance:      £" + String.format("%.2f", newBalance) + "\n"
+                    + "Credit limit:     £" + String.format("%.2f", selectedHolder.getCreditLimit()) + "\n\n"
+                    + "Ask the customer to pay their outstanding balance first,\n"
+                    + "or take payment by cash or card instead.",
+                    "Credit Limit Exceeded", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
         // Build Sale object
         int holderId = selectedHolder != null ? selectedHolder.getHolderId() : 0;
         PaymentMethod pm = PaymentMethod.valueOf(method);
